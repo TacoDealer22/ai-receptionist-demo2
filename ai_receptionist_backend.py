@@ -1,67 +1,68 @@
-import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import openai
-from dotenv import load_dotenv
-from elevenlabs.client import ElevenLabs
+import os
+from openai import OpenAI
+from elevenlabs import generate, stream, set_api_key
 
-# Load environment variables
-load_dotenv()
-
-# Setup API keys
-openai.api_key = os.getenv("OPENAI_API_KEY")
-eleven_api_key = os.getenv("ELEVENLABS_API_KEY")
-
-# ElevenLabs client
-client = ElevenLabs(api_key=eleven_api_key)
-
-# Flask setup
+# === Basic Setup ===
 app = Flask(__name__)
 CORS(app)
 
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    user_input = request.form.get("SpeechResult", "")
+# === Load API keys from environment ===
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY")
 
-    # Build prompt
-    prompt = f"""
-    You are a friendly AI receptionist named Luna working for Omar's company in Jordan.
-    You speak English and Arabic.
-    Your job is to answer customer questions, guide them, and explain services.
-    If someone asks who made you, say: Omar Majdi Mohammad Aljallad.
-    Keep it short and helpful.
-    User: {user_input}
-    """
+client = OpenAI(api_key=OPENAI_API_KEY)
+set_api_key(ELEVEN_API_KEY)
 
-    # OpenAI response
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[{ "role": "user", "content": prompt }]
-    )
-    final_text = response.choices[0].message.content.strip()
+# === Static Responses for Known Questions ===
+static_responses = {
+    "who created you": "I was created by OMAR MAJDI MOHAMMAD ALJALLAD.",
+    "what are your working hours": "I’m available 24/7 to answer your questions.",
+    "where are you located": "I’m hosted online and always available.",
+    "who is your owner": "My creator is OMAR ALJALLAD.",
+    "who made you": "OMAR ALJALLAD is my developer.",
+    "what's your name": "My name is Luna, your AI receptionist."
+}
 
-    # ElevenLabs TTS
-    audio = client.text_to_speech.convert(
-        voice_id="EXAVITQu4vr4xnSDxMaL",  # Default voice Alloy
-        model_id="eleven_monolingual_v1",
-        text=final_text,
-        output_format="mp3_44100",
-        optimize_streaming_latency="0"
-    )
+@app.route("/")
+def home():
+    return "AI Receptionist Luna is running!"
 
-    # Save audio file
-    output_path = "/tmp/response.mp3"
-    with open(output_path, "wb") as f:
-        for chunk in audio:
-            f.write(chunk)
+@app.route("/ask", methods=["POST"])
+def ask():
+    data = request.get_json()
+    question = data.get("question", "").lower()
 
-    # Upload somewhere like S3 / use direct hosting service
-    # For now, just return text only (Twilio Studio can’t stream directly from /tmp)
-    return jsonify({
-        "text": final_text,
-        "audio_url": "NOT_IMPLEMENTED"
-    })
+    # Check for static responses
+    for key, answer in static_responses.items():
+        if key in question:
+            return jsonify({"answer": answer})
+
+    # Otherwise, use GPT to generate answer
+    try:
+        completion = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are an AI receptionist named Luna created by OMAR MAJDI MOHAMMAD ALJALLAD. Answer politely and helpfully."},
+                {"role": "user", "content": question}
+            ]
+        )
+        answer = completion.choices[0].message.content
+        return jsonify({"answer": answer})
+    except Exception as e:
+        return jsonify({"answer": "Sorry, something went wrong."}), 500
+
+@app.route("/speak", methods=["POST"])
+def speak():
+    data = request.get_json()
+    text = data.get("text", "Hello, how can I help you?")
+    try:
+        audio_stream = generate(text=text, voice="Rachel", stream=True)
+        return stream(audio_stream)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
