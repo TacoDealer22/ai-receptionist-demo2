@@ -12,7 +12,10 @@ CORS(app)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Updated OpenAI client style
+client = OpenAI()
+client.api_key = OPENAI_API_KEY
+
 voice_client = ElevenLabs(api_key=ELEVEN_API_KEY)
 
 # === Static Responses for Known Questions ===
@@ -60,7 +63,6 @@ def speak():
             voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel's voice ID
             text=text
         )
-
         return Response(audio, content_type="audio/mpeg")
     except Exception as e:
         return jsonify({"error": str(e)}), 500
