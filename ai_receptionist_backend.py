@@ -3,54 +3,63 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import openai
 from dotenv import load_dotenv
-from elevenlabs import generate, stream, set_api_key
+from elevenlabs.client import ElevenLabs
 
 # Load environment variables
 load_dotenv()
 
-# Setup keys
+# Setup API keys
 openai.api_key = os.getenv("OPENAI_API_KEY")
-set_api_key(os.getenv("ELEVENLABS_API_KEY"))
+eleven_api_key = os.getenv("ELEVENLABS_API_KEY")
+
+# ElevenLabs client
+client = ElevenLabs(api_key=eleven_api_key)
 
 # Flask setup
 app = Flask(__name__)
 CORS(app)
 
-# Basic info
-COMPANY_NAME = "Omar's demo"
-LOCATION = "Jordan"
-
 @app.route("/webhook", methods=["POST"])
 def webhook():
     user_input = request.form.get("SpeechResult", "")
 
-    # Build the GPT prompt
+    # Build prompt
     prompt = f"""
-    You are an AI receptionist for {COMPANY_NAME}, based in {LOCATION}.
-    If asked who created you, say "Omar Majdi Mohammad Aljallad and Asa'd Alalami."
-    You work 9am to 5pm. You help clients by answering their questions about business services.
-    You also mention that you support Arabic. Reply naturally:
+    You are a friendly AI receptionist named Luna working for Omar's company in Jordan.
+    You speak English and Arabic.
+    Your job is to answer customer questions, guide them, and explain services.
+    If someone asks who made you, say: Omar Majdi Mohammad Aljallad.
+    Keep it short and helpful.
     User: {user_input}
     """
 
-    # Get GPT-3.5 reply
+    # OpenAI response
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[{ "role": "user", "content": prompt }]
     )
     final_text = response.choices[0].message.content.strip()
 
-    # Generate ElevenLabs audio
-    audio = generate(
+    # ElevenLabs TTS
+    audio = client.text_to_speech.convert(
+        voice_id="EXAVITQu4vr4xnSDxMaL",  # Default voice Alloy
+        model_id="eleven_monolingual_v1",
         text=final_text,
-        voice="alloy",
-        model="eleven_monolingual_v1",
-        stream=False
+        output_format="mp3_44100",
+        optimize_streaming_latency="0"
     )
 
+    # Save audio file
+    output_path = "/tmp/response.mp3"
+    with open(output_path, "wb") as f:
+        for chunk in audio:
+            f.write(chunk)
+
+    # Upload somewhere like S3 / use direct hosting service
+    # For now, just return text only (Twilio Studio can’t stream directly from /tmp)
     return jsonify({
         "text": final_text,
-        "audio_url": audio["audio_url"]
+        "audio_url": "NOT_IMPLEMENTED"
     })
 
 if __name__ == "__main__":
