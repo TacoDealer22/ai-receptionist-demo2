@@ -1,20 +1,23 @@
 from flask import Flask, request, Response, send_from_directory
 from flask_cors import CORS
 from openai import OpenAI
-from elevenlabs import generate, save, set_api_key
+from elevenlabs.client import ElevenLabs
+from elevenlabs import save
 import os
 import shutil
 
 app = Flask(__name__)
 CORS(app)
 
-# Load environment variables
+# Set API keys
 openai_api_key = os.getenv("OPENAI_API_KEY")
 elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
 
-# Initialize clients
+# OpenAI Client
 client = OpenAI(api_key=openai_api_key)
-set_api_key(elevenlabs_api_key)
+
+# ElevenLabs Client
+tts = ElevenLabs(api_key=elevenlabs_api_key)
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -27,13 +30,12 @@ def webhook():
 
     reply = response.choices[0].message.content
 
-    audio = generate(
+    audio = tts.generate(
         text=reply,
         voice="Rachel",
         model="eleven_monolingual_v1"
     )
 
-    # Save to static folder
     os.makedirs("static", exist_ok=True)
     save(audio, "/tmp/response.mp3")
     shutil.copy("/tmp/response.mp3", "static/response.mp3")
@@ -42,19 +44,16 @@ def webhook():
 
 @app.route("/voice", methods=["GET"])
 def voice():
-    # Generate greeting audio
-    greeting = generate(
+    audio = tts.generate(
         text="Hello and welcome to our AI receptionist! How can I assist you today?",
         voice="Rachel",
         model="eleven_monolingual_v1"
     )
 
-    # Save to static folder
     os.makedirs("static", exist_ok=True)
-    save(greeting, "/tmp/ai_greeting.mp3")
+    save(audio, "/tmp/ai_greeting.mp3")
     shutil.copy("/tmp/ai_greeting.mp3", "static/ai_greeting.mp3")
 
-    # Return TwiML for Twilio to play it
     xml = f"""
     <Response>
         <Play>https://ai-receptionist-demo2.onrender.com/static/ai_greeting.mp3</Play>
