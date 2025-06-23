@@ -1,74 +1,67 @@
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import openai
 import os
 from dotenv import load_dotenv
-from elevenlabs import generate, save, set_api_key
-import uuid
+from elevenlabs.client import ElevenLabs
+from elevenlabs import play, save  # for local testing (not needed in production)
 
 load_dotenv()
 
-app = Flask(__name__)
-CORS(app)
+# Set API keys
+openai.api_key = os.getenv("OPENAI_API_KEY")
+eleven = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
-# API Keys
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY")
-
-openai.api_key = OPENAI_API_KEY
-set_api_key(ELEVEN_API_KEY)
-
-# Preset answers
+# Preset Q&A
 PRESETS = {
-    "name of the company": "Omar's AI demo",
+    "name of the company": "Omar's Ai demo",
     "who created you": "Omar Aljallad and As'ad Alalami",
     "what are your hours": "We're open from 9 am to 5 pm",
     "where are you located": "Jordan, Amman",
     "what does your company do": "Offers AI receptionist services",
 }
 
-@app.route("/")
-def home():
-    return "AI Receptionist backend is running!"
+def generate_answer(user_question):
+    normalized = user_question.strip().lower()
+    if normalized in PRESETS:
+        return PRESETS[normalized]
+    resp = openai.ChatCompletion.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": user_question},
+        ],
+        temperature=0.7,
+        max_tokens=150,
+    )
+    return resp.choices[0].message.content.strip()
 
-@app.route("/webhook", methods=["POST"])
-def handle_webhook():
-    data = request.json
-    question = data.get("SpeechResult", "").strip().lower()
+def text_to_speech(answer_text):
+    # Replace with a voice_id from your ElevenLabs account
+    voice_id = "21m00Tcm4TlvDq8ikWAM"
+    audio = eleven.text_to_speech.convert(
+        text=answer_text,
+        voice_id=voice_id,
+        model_id="eleven_multilingual_v2",
+        output_format="mp3_44100_128"
+    )
+    return audio  # raw bytes of MP3
 
-    if not question:
-        return Response("<Response><Say>I didn't catch that. Please repeat.</Say></Response>", mimetype="text/xml")
+app = Flask(__name__)
+CORS(app)
 
-    # Answer logic
-    answer = PRESETS.get(question)
-    if not answer:
-        try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are a helpful AI receptionist."},
-                    {"role": "user", "content": question}
-                ]
-            )
-            answer = response.choices[0].message.content.strip()
-        except Exception as e:
-            return Response(f"<Response><Say>Sorry, there was an error: {str(e)}</Say></Response>", mimetype="text/xml")
-
-    # Generate audio with ElevenLabs
-    filename = f"{uuid.uuid4()}.mp3"
-    filepath = f"static/{filename}"
-    try:
-        audio = generate(text=answer, voice="Rachel", model="eleven_monolingual_v1")
-        save(audio, filepath)
-        audio_url = f"https://{request.host}/static/{filename}"
-        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Play>{audio_url}</Play>
-</Response>"""
-        return Response(twiml, mimetype="text/xml")
-    except Exception as e:
-        return Response(f"<Response><Say>Sorry, audio failed: {str(e)}</Say></Response>", mimetype="text/xml")
+@app.route("/ask", methods=["POST"])
+def ask():
+    data = request.json or {}
+    q = data.get("question", "")
+    if not q:
+        return jsonify({"error": "No question provided"}), 400
+    answer = generate_answer(q)
+    audio = text_to_speech(answer)
+    # Optionally save during dev/testing:
+    # save(audio, "out.mp3")
+    return jsonify({"answer": answer, "audio_b64": audio.decode("latin1")})
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
