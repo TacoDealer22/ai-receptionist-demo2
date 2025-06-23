@@ -61,7 +61,30 @@ def speak():
         return Response(audio, content_type="audio/mpeg")
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+import uuid
+from flask import Response
 
+@app.route("/voice", methods=["POST"])
+def voice():
+    text = "Hello! This is Luna, your AI receptionist. How can I help you today?"
+    filename = f"static/audio_{uuid.uuid4().hex}.mp3"
+    
+    audio = voice_client.text_to_speech.convert(
+        voice_id="21m00Tcm4TlvDq8ikWAM",
+        text=text
+    )
+
+    with open(filename, "wb") as f:
+        f.write(audio)
+
+    domain = os.getenv("RENDER_EXTERNAL_URL").rstrip("/")
+
+    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Play>{domain}/{filename}</Play>
+</Response>
+"""
+    return Response(twiml, mimetype="text/xml")
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
