@@ -3,4 +3,4 @@ flask
 openai
 requests
 python-dotenv
-elevenlabs==2.4.0
+elevenlabs==1.1.3
