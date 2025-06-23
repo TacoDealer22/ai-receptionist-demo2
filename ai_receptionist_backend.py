@@ -1,34 +1,31 @@
 from flask import Flask, request, Response, send_from_directory
 from flask_cors import CORS
-from openai import OpenAI
-from elevenlabs.client import ElevenLabs
+import openai
 from elevenlabs import save
+from elevenlabs.client import ElevenLabs
 import os
 import shutil
 
 app = Flask(__name__)
 CORS(app)
 
-# Set API keys
-openai_api_key = os.getenv("OPENAI_API_KEY")
+# Load API keys from env
+openai.api_key = os.getenv("OPENAI_API_KEY")
 elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
 
-# OpenAI Client
-client = OpenAI(api_key=openai_api_key)
-
-# ElevenLabs Client
+# ElevenLabs client
 tts = ElevenLabs(api_key=elevenlabs_api_key)
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
     user_text = request.json.get("SpeechResult", "")
 
-    response = client.chat.completions.create(
+    response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": user_text}]
     )
 
-    reply = response.choices[0].message.content
+    reply = response['choices'][0]['message']['content']
 
     audio = tts.generate(
         text=reply,
