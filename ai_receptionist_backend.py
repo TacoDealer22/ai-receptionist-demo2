@@ -1,92 +1,52 @@
-import os
-import uuid
-from flask import Flask, request, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from openai import OpenAI
+import os
+import openai
 import requests
+from elevenlabs import generate, save, set_api_key
 
 app = Flask(__name__)
 CORS(app)
 
-# ====== SET YOUR KEYS AS ENV VARIABLES ======
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY")
-ELEVEN_VOICE_ID = "Rachel"  # Change to another ElevenLabs voice if needed
-# ============================================
+# Set your API keys (DO NOT hardcode in production)
+openai.api_key = os.getenv("OPENAI_API_KEY")
+set_api_key(os.getenv("ELEVENLABS_API_KEY"))
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Create a folder to store MP3s
+os.makedirs("static", exist_ok=True)
 
-@app.route("/webhook", methods=["POST"])
-def handle_call():
-    speech_text = request.form.get("SpeechResult", "")
-    if not speech_text:
-        return "No speech received", 400
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    user_input = request.form.get("SpeechResult", "")
+    print(f"User said: {user_input}")
 
-    print(f"[+] Incoming speech: {speech_text}")
-
-    # Step 1: Get AI response
-    response = client.chat.completions.create(
-        model="gpt-4o",
+    # Step 1: Use OpenAI to generate response
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
         messages=[
-            {"role": "system", "content": "You are a friendly and helpful AI receptionist named Luna. Company name is Omar's demo. We are located in Jordan. We offer AI receptionist services. The working hours are from 9 AM to 5 PM. If asked who created you, say Omar Aljallad and Asa'd Alalami."},
-            {"role": "user", "content": speech_text}
+            {"role": "system", "content": "You are a friendly receptionist named Luna."},
+            {"role": "user", "content": user_input}
         ]
     )
-    ai_reply = response.choices[0].message.content.strip()
-    print(f"[+] GPT reply: {ai_reply}")
+    assistant_text = response['choices'][0]['message']['content']
+    print(f"Luna: {assistant_text}")
 
-    # Step 2: Convert text to speech using ElevenLabs
-    audio_url = generate_elevenlabs_audio(ai_reply)
-    if not audio_url:
-        return "Error generating audio", 500
+    # Step 2: Use ElevenLabs to generate audio
+    audio = generate(text=assistant_text, voice="Rachel", model="eleven_monolingual_v1")
 
-    # Step 3: Return TwiML to Twilio
-    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Play>{audio_url}</Play>
-    <Pause length="2"/>
-    <Redirect>/webhook</Redirect>
-</Response>"""
+    # Step 3: Save MP3 to static folder
+    filename = "luna_response.mp3"
+    filepath = os.path.join("static", filename)
+    save(audio, filepath)
 
-    return twiml, 200, {'Content-Type': 'application/xml'}
+    # Step 4: Return URL for Twilio
+    audio_url = f"https://{request.host}/static/{filename}"
+    return jsonify({"audio_url": audio_url})
 
-def generate_elevenlabs_audio(text):
-    try:
-        filename = f"{uuid.uuid4()}.mp3"
-        filepath = f"static/{filename}"
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVEN_VOICE_ID}"
-
-        headers = {
-            "xi-api-key": ELEVEN_API_KEY,
-            "Content-Type": "application/json"
-        }
-
-        data = {
-            "text": text,
-            "model_id": "eleven_multilingual_v2",
-            "voice_settings": {
-                "stability": 0.4,
-                "similarity_boost": 0.75
-            }
-        }
-
-        response = requests.post(url, json=data, headers=headers)
-        if response.status_code != 200:
-            print(f"ElevenLabs Error: {response.text}")
-            return None
-
-        with open(filepath, "wb") as f:
-            f.write(response.content)
-
-        return f"https://ai-receptionist-demo2.onrender.com/static/{filename}"
-
-    except Exception as e:
-        print(f"Error generating audio: {e}")
-        return None
-
+# Serve static files (MP3)
 @app.route('/static/<path:filename>')
-def serve_audio(filename):
-    return send_from_directory("static", filename)
+def serve_static(filename):
+    return send_from_directory('static', filename)
 
-if __name__ == "__main__":
-app.run(host="0.0.0.0", port=10000)
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=10000)
