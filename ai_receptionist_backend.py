@@ -2,51 +2,55 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 import openai
-import requests
-from elevenlabs import generate, save, set_api_key
+from elevenlabs import ElevenLabs, Voice, VoiceSettings
 
 app = Flask(__name__)
 CORS(app)
 
-# Set your API keys (DO NOT hardcode in production)
+# Load API keys from environment variables
 openai.api_key = os.getenv("OPENAI_API_KEY")
-set_api_key(os.getenv("ELEVENLABS_API_KEY"))
-
-# Create a folder to store MP3s
-os.makedirs("static", exist_ok=True)
+client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     user_input = request.form.get("SpeechResult", "")
-    print(f"User said: {user_input}")
+    if not user_input:
+        return jsonify({"error": "Missing SpeechResult"}), 400
 
-    # Step 1: Use OpenAI to generate response
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are a friendly receptionist named Luna."},
-            {"role": "user", "content": user_input}
-        ]
-    )
-    assistant_text = response['choices'][0]['message']['content']
-    print(f"Luna: {assistant_text}")
+    try:
+        # Step 1: Get AI response from OpenAI
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a friendly AI receptionist named Luna. Speak clearly and help the caller."},
+                {"role": "user", "content": user_input}
+            ]
+        )
+        assistant_text = response['choices'][0]['message']['content']
 
-    # Step 2: Use ElevenLabs to generate audio
-    audio = generate(text=assistant_text, voice="Rachel", model="eleven_monolingual_v1")
+        # Step 2: Generate audio from ElevenLabs
+        audio = client.generate(
+            text=assistant_text,
+            voice=Voice(voice_id="EXAVITQu4vr4xnSDxMaL"),  # Rachel voice
+            model="eleven_monolingual_v1",
+            voice_settings=VoiceSettings(stability=0.5, similarity_boost=0.5)
+        )
 
-    # Step 3: Save MP3 to static folder
-    filename = "luna_response.mp3"
-    filepath = os.path.join("static", filename)
-    save(audio, filepath)
+        # Step 3: Save MP3
+        os.makedirs("static", exist_ok=True)
+        output_path = os.path.join("static", "luna_response.mp3")
+        with open(output_path, "wb") as f:
+            f.write(audio)
 
-    # Step 4: Return URL for Twilio
-    audio_url = f"https://{request.host}/static/{filename}"
-    return jsonify({"audio_url": audio_url})
+        # Step 4: Return audio file path
+        return jsonify({"audio_url": f"https://{request.host}/static/luna_response.mp3"})
 
-# Serve static files (MP3)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/static/<path:filename>')
-def serve_static(filename):
-    return send_from_directory('static', filename)
+def serve_audio(filename):
+    return send_from_directory("static", filename)
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=10000)
+    app.run(host='0.0.0.0', port=10000)
