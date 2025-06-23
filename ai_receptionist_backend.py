@@ -1,56 +1,58 @@
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
 import os
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import openai
-from elevenlabs import ElevenLabs, Voice, VoiceSettings
+from dotenv import load_dotenv
+from elevenlabs import generate, stream, set_api_key
 
+# Load environment variables
+load_dotenv()
+
+# Setup keys
+openai.api_key = os.getenv("OPENAI_API_KEY")
+set_api_key(os.getenv("ELEVENLABS_API_KEY"))
+
+# Flask setup
 app = Flask(__name__)
 CORS(app)
 
-# Load API keys from environment variables
-openai.api_key = os.getenv("OPENAI_API_KEY")
-client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
+# Basic info
+COMPANY_NAME = "Omar's demo"
+LOCATION = "Jordan"
 
-@app.route('/webhook', methods=['POST'])
+@app.route("/webhook", methods=["POST"])
 def webhook():
     user_input = request.form.get("SpeechResult", "")
-    if not user_input:
-        return jsonify({"error": "Missing SpeechResult"}), 400
 
-    try:
-        # Step 1: Get AI response from OpenAI
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a friendly AI receptionist named Luna. Speak clearly and help the caller."},
-                {"role": "user", "content": user_input}
-            ]
-        )
-        assistant_text = response['choices'][0]['message']['content']
+    # Build the GPT prompt
+    prompt = f"""
+    You are an AI receptionist for {COMPANY_NAME}, based in {LOCATION}.
+    If asked who created you, say "Omar Majdi Mohammad Aljallad and Asa'd Alalami."
+    You work 9am to 5pm. You help clients by answering their questions about business services.
+    You also mention that you support Arabic. Reply naturally:
+    User: {user_input}
+    """
 
-        # Step 2: Generate audio from ElevenLabs
-        audio = client.generate(
-            text=assistant_text,
-            voice=Voice(voice_id="EXAVITQu4vr4xnSDxMaL"),  # Rachel voice
-            model="eleven_monolingual_v1",
-            voice_settings=VoiceSettings(stability=0.5, similarity_boost=0.5)
-        )
+    # Get GPT-3.5 reply
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[{ "role": "user", "content": prompt }]
+    )
+    final_text = response.choices[0].message.content.strip()
 
-        # Step 3: Save MP3
-        os.makedirs("static", exist_ok=True)
-        output_path = os.path.join("static", "luna_response.mp3")
-        with open(output_path, "wb") as f:
-            f.write(audio)
+    # Generate ElevenLabs audio
+    audio = generate(
+        text=final_text,
+        voice="alloy",
+        model="eleven_monolingual_v1",
+        stream=False
+    )
 
-        # Step 4: Return audio file path
-        return jsonify({"audio_url": f"https://{request.host}/static/luna_response.mp3"})
+    return jsonify({
+        "text": final_text,
+        "audio_url": audio["audio_url"]
+    })
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/static/<path:filename>')
-def serve_audio(filename):
-    return send_from_directory("static", filename)
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
