@@ -1,24 +1,19 @@
 from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 import os
-from openai import OpenAI
+import openai
 from elevenlabs.client import ElevenLabs
 
-# === Basic Setup ===
+# === Setup ===
 app = Flask(__name__)
 CORS(app)
 
-# === Load API keys from environment ===
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# === Load API keys ===
+openai.api_key = os.getenv("OPENAI_API_KEY")
 ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY")
-
-# Updated OpenAI client style
-client = OpenAI()
-client.api_key = OPENAI_API_KEY
-
 voice_client = ElevenLabs(api_key=ELEVEN_API_KEY)
 
-# === Static Responses for Known Questions ===
+# === Static responses ===
 static_responses = {
     "who created you": "I was created by OMAR MAJDI MOHAMMAD ALJALLAD.",
     "what are your working hours": "I’m available 24/7 to answer your questions.",
@@ -42,16 +37,16 @@ def ask():
             return jsonify({"answer": answer})
 
     try:
-        completion = client.chat.completions.create(
+        resp = openai.ChatCompletion.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are an AI receptionist named Luna created by OMAR MAJDI MOHAMMAD ALJALLAD. Answer politely and helpfully."},
+                {"role": "system", "content": "You are Luna, an AI receptionist created by Omar Aljallad."},
                 {"role": "user", "content": question}
             ]
         )
-        answer = completion.choices[0].message.content
+        answer = resp.choices[0].message.content
         return jsonify({"answer": answer})
-    except Exception as e:
+    except Exception:
         return jsonify({"answer": "Sorry, something went wrong."}), 500
 
 @app.route("/speak", methods=["POST"])
@@ -60,7 +55,7 @@ def speak():
     text = data.get("text", "Hello, how can I help you?")
     try:
         audio = voice_client.text_to_speech.stream(
-            voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel's voice ID
+            voice_id="21m00Tcm4TlvDq8ikWAM",
             text=text
         )
         return Response(audio, content_type="audio/mpeg")
