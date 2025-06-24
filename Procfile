@@ -1,1 +1,1 @@
-web: python ai_receptionist_backend.py
+web: gunicorn ai_receptionist_backend:app
