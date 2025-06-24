@@ -1,5 +1,3 @@
-# app.py
-
 import os
 import uuid
 from flask import Flask, request, Response
@@ -9,7 +7,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Initialize Flask app
 app = Flask(__name__)
 
 # Ensure audio directory exists
@@ -28,38 +25,57 @@ def generate_twiml():
     user_input = request.form.get("SpeechResult", "").strip()
 
     if not user_input:
-        fallback_text = "Sorry, I didn’t hear anything. Could you please repeat your question?"
+        fallback_text = "Sorry, I didn’t hear anything. If you have more questions, please call again."
         fallback_text += "\n\nThis AI receptionist was created by OMAR MAJDI MOHAMMAD ALJALLAD."
         fallback_audio = synthesize_speech(fallback_text)
         fallback_url = f"{request.url_root}static/audio/{fallback_audio}"
 
-        fallback_twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Play>{fallback_url}</Play>
+  <Redirect method="POST">/hangup</Redirect>
 </Response>"""
-        return Response(fallback_twiml, mimetype="text/xml")
+        return Response(twiml, mimetype="text/xml")
 
     response_text = ask_gpt(user_input)
     response_text += "\n\nThis AI receptionist was created by OMAR MAJDI MOHAMMAD ALJALLAD."
+
     audio_filename = synthesize_speech(response_text)
     audio_url = f"{request.url_root}static/audio/{audio_filename}"
 
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Play>{audio_url}</Play>
+  <Redirect method="POST">/next</Redirect>
 </Response>"""
+    return Response(twiml, mimetype="text/xml")
 
+@app.route("/next", methods=["POST"])
+def prompt_next_question():
+    prompt_text = "You can ask another question, or say goodbye to end the call."
+    prompt_text += "\n\nThis AI receptionist was created by OMAR MAJDI MOHAMMAD ALJALLAD."
+    audio_filename = synthesize_speech(prompt_text)
+    audio_url = f"{request.url_root}static/audio/{audio_filename}"
+
+    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Play>{audio_url}</Play>
+</Response>"""
     return Response(twiml, mimetype="text/xml")
 
 @app.route("/hangup", methods=["POST"])
 def hangup_call():
-    return Response(
-        """<?xml version="1.0" encoding="UTF-8"?>
+    goodbye_text = "Thank you for calling. Goodbye!"
+    goodbye_text += "\n\nThis AI receptionist was created by OMAR MAJDI MOHAMMAD ALJALLAD."
+    audio_filename = synthesize_speech(goodbye_text)
+    audio_url = f"{request.url_root}static/audio/{audio_filename}"
+
+    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
+  <Play>{audio_url}</Play>
   <Hangup/>
-</Response>""",
-        mimetype="text/xml"
-    )
+</Response>"""
+    return Response(twiml, mimetype="text/xml")
 
 def ask_gpt(prompt):
     completion = openai.ChatCompletion.create(
