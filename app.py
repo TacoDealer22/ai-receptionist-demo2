@@ -5,10 +5,7 @@ import openai
 import requests
 from dotenv import load_dotenv
 
-# Signature: Created by OMAR MAJDI MOHAMMAD ALJALLAD
-
 load_dotenv()
-
 app = Flask(__name__)
 
 AUDIO_DIR = "static/audio"
@@ -20,7 +17,7 @@ ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
 
 openai.api_key = OPENAI_API_KEY
 
-PREDEFINED_RESPONSES = {
+PREDEFINED_QA = {
     "what are your working hours": "We’re open from 9 AM to 6 PM, Sunday to Thursday.",
     "what are your business hours": "We operate Sunday through Thursday, from 9 in the morning to 6 in the evening.",
     "where are you located": "Our main office is located in Amman, Jordan.",
@@ -31,108 +28,84 @@ PREDEFINED_RESPONSES = {
     "what is the name of your company": "Omar's demo.",
     "what does your company do": "We provide AI Receptionist services through a subscription with our company.",
     "can i speak to someone": "I’ll forward your request. Please leave your name and message after the tone.",
-    "can you call me back": "I’ll forward your request. Please leave your name and number after the tone.",
+    "can you call me back": "I’ll forward your request. Please leave your name and number after the tone."
 }
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Luna is live."
 
 @app.route("/twiml", methods=["POST"])
 def generate_twiml():
     user_input = request.form.get("SpeechResult", "").strip().lower()
-    print("🎤 Twilio SpeechResult:", user_input)
+    print(f"🎤 Twilio SpeechResult: {user_input}")
 
     if not user_input:
-        print("⚠️ No speech detected. Sending fallback.")
-        fallback_text = "Sorry, I didn’t hear anything. Please try again later."
+        print("⚠️ No input received — using fallback response.")
+        fallback_text = "Sorry, I didn’t hear anything. If you have more questions, please call again."
         fallback_audio = synthesize_speech(fallback_text)
-        fallback_url = f"{request.url_root}static/audio/{fallback_audio}"
-        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Play>{fallback_url}</Play>
-  <Redirect method="POST">/hangup</Redirect>
-</Response>"""
-        return Response(twiml, mimetype="text/xml")
+        audio_url = f"{request.url_root}static/audio/{fallback_audio}"
+        return twiml_play_and_redirect(audio_url, "/hangup")
 
-    if any(kw in user_input for kw in ["goodbye", "bye", "thank you", "that's all", "no more questions"]):
-        print("👋 Detected goodbye. Ending call.")
-        goodbye_text = "Thank you for calling. Goodbye!"
-        goodbye_audio = synthesize_speech(goodbye_text)
-        goodbye_url = f"{request.url_root}static/audio/{goodbye_audio}"
-        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Play>{goodbye_url}</Play>
-  <Hangup/>
-</Response>"""
-        return Response(twiml, mimetype="text/xml")
+    for question, answer in PREDEFINED_QA.items():
+        if question in user_input:
+            print(f"📌 Matched predefined Q&A: {question}")
+            audio_filename = synthesize_speech(answer)
+            audio_url = f"{request.url_root}static/audio/{audio_filename}"
+            return twiml_play_and_redirect(audio_url, "/next")
 
-    answer = match_predefined_question(user_input)
-    if answer:
-        print("📌 Matched predefined question.")
-        response_text = answer
-    else:
-        print("🧠 No match. Sending to GPT...")
-        response_text = ask_gpt(user_input)
-
-    audio_filename = synthesize_speech(response_text)
-    audio_url = f"{request.url_root}static/audio/{audio_filename}"
-    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Play>{audio_url}</Play>
-  <Redirect method="POST">/next</Redirect>
-</Response>"""
-    return Response(twiml, mimetype="text/xml")
+    print("💬 Sending to OpenAI (fallback)...")
+    try:
+        gpt_answer = ask_gpt(user_input)
+        audio_filename = synthesize_speech(gpt_answer)
+        audio_url = f"{request.url_root}static/audio/{audio_filename}"
+        return twiml_play_and_redirect(audio_url, "/next")
+    except Exception as e:
+        print(f"❌ OpenAI Error: {e}")
+        error_audio = synthesize_speech("Sorry, something went wrong. Please try again later.")
+        audio_url = f"{request.url_root}static/audio/{error_audio}"
+        return twiml_play_and_redirect(audio_url, "/hangup")
 
 @app.route("/next", methods=["POST"])
-def prompt_next_question():
-    prompt_text = "You can ask another question, or say goodbye to end the call."
-    audio_filename = synthesize_speech(prompt_text)
+def next_question():
+    prompt = "You can ask another question, or say goodbye to end the call."
+    audio_filename = synthesize_speech(prompt)
     audio_url = f"{request.url_root}static/audio/{audio_filename}"
-    print("🔁 Asking for another question.")
-    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Play>{audio_url}</Play>
-</Response>"""
-    return Response(twiml, mimetype="text/xml")
+    return twiml_play_and_redirect(audio_url, "/twiml")
 
 @app.route("/hangup", methods=["POST"])
-def hangup_call():
-    goodbye_text = "Thank you for calling. Goodbye!"
-    audio_filename = synthesize_speech(goodbye_text)
+def hangup():
+    goodbye = "Thank you for calling. Goodbye!"
+    audio_filename = synthesize_speech(goodbye)
     audio_url = f"{request.url_root}static/audio/{audio_filename}"
-    print("📞 Hanging up.")
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Play>{audio_url}</Play>
   <Hangup/>
+</Response>"""
+    return Response(twiml, mimetype="text/xml")
+
+def twiml_play_and_redirect(audio_url, next_path):
+    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Play>{audio_url}</Play>
+  <Redirect method="POST">{next_path}</Redirect>
 </Response>"""
     return Response(twiml, mimetype="text/xml")
 
 def ask_gpt(prompt):
-    print("🔍 SENDING TO GPT:", prompt)
     completion = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are Luna, a helpful and polite AI receptionist who speaks clearly and naturally. "
-                    "If someone asks who created you, respond with: 'I was created by OMAR MAJDI MOHAMMAD ALJALLAD.'"
-                )
-            },
+            {"role": "system", "content": "You are Luna, a helpful and polite AI receptionist who speaks clearly and naturally."},
             {"role": "user", "content": prompt}
         ]
     )
-    gpt_reply = completion.choices[0].message["content"]
-    print("✅ GPT replied:", gpt_reply)
-    return gpt_reply
-
-def match_predefined_question(user_input):
-    normalized = user_input.lower().strip("?!.")
-    for q, a in PREDEFINED_RESPONSES.items():
-        if q in normalized:
-            return a
-    return None
+    gpt_response = completion.choices[0].message["content"]
+    print("🧠 GPT response:", gpt_response)
+    return gpt_response
 
 def synthesize_speech(text):
-    print("🎧 Synthesizing:", text[:60] + ("..." if len(text) > 60 else ""))
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
     headers = {
         "xi-api-key": ELEVENLABS_API_KEY,
@@ -146,8 +119,8 @@ def synthesize_speech(text):
             "similarity_boost": 0.8
         }
     }
-
     response = requests.post(url, headers=headers, json=payload)
+
     if response.status_code != 200:
         raise Exception(f"ElevenLabs API error: {response.text}")
 
@@ -155,8 +128,7 @@ def synthesize_speech(text):
     path = os.path.join(AUDIO_DIR, filename)
     with open(path, "wb") as f:
         f.write(response.content)
-
-    print("✅ Audio saved as:", filename)
+    print(f"✅ Audio saved as: {filename}")
     return filename
 
 if __name__ == "__main__":
