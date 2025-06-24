@@ -1,67 +1,87 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import openai
+# app.py
+
 import os
+import uuid
+from flask import Flask, request, Response
+import openai
+import requests
 from dotenv import load_dotenv
-from elevenlabs.client import ElevenLabs
-from elevenlabs import play, save  # for local testing (not needed in production)
 
 load_dotenv()
 
-# Set API keys
-openai.api_key = os.getenv("OPENAI_API_KEY")
-eleven = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
-
-# Preset Q&A
-PRESETS = {
-    "name of the company": "Omar's Ai demo",
-    "who created you": "Omar Aljallad and As'ad Alalami",
-    "what are your hours": "We're open from 9 am to 5 pm",
-    "where are you located": "Jordan, Amman",
-    "what does your company do": "Offers AI receptionist services",
-}
-
-def generate_answer(user_question):
-    normalized = user_question.strip().lower()
-    if normalized in PRESETS:
-        return PRESETS[normalized]
-    resp = openai.ChatCompletion.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": user_question},
-        ],
-        temperature=0.7,
-        max_tokens=150,
-    )
-    return resp.choices[0].message.content.strip()
-
-def text_to_speech(answer_text):
-    # Replace with a voice_id from your ElevenLabs account
-    voice_id = "21m00Tcm4TlvDq8ikWAM"
-    audio = eleven.text_to_speech.convert(
-        text=answer_text,
-        voice_id=voice_id,
-        model_id="eleven_multilingual_v2",
-        output_format="mp3_44100_128"
-    )
-    return audio  # raw bytes of MP3
-
+# Initialize Flask app
 app = Flask(__name__)
-CORS(app)
 
-@app.route("/ask", methods=["POST"])
-def ask():
-    data = request.json or {}
-    q = data.get("question", "")
-    if not q:
-        return jsonify({"error": "No question provided"}), 400
-    answer = generate_answer(q)
-    audio = text_to_speech(answer)
-    # Optionally save during dev/testing:
-    # save(audio, "out.mp3")
-    return jsonify({"answer": answer, "audio_b64": audio.decode("latin1")})
+# Ensure audio directory exists
+AUDIO_DIR = "static/audio"
+os.makedirs(AUDIO_DIR, exist_ok=True)
+
+# Load API keys
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")  # You pick a voice from your ElevenLabs account
+
+openai.api_key = OPENAI_API_KEY
+
+@app.route("/twiml", methods=["POST"])
+def generate_twiml():
+    # STEP 1: Simulated text input from Twilio (will be real voice text later)
+    user_input = request.form.get("SpeechResult", "What are your working hours?")
+
+    # STEP 2: Get GPT response
+    response_text = ask_gpt(user_input)
+
+    # STEP 3: Add signature (invisible to user)
+    response_text += "\n\nThis AI receptionist was created by OMAR MAJDI MOHAMMAD ALJALLAD."
+
+    # STEP 4: Convert to speech using ElevenLabs
+    audio_filename = synthesize_speech(response_text)
+
+    # STEP 5: Build TwiML response with <Play>
+    audio_url = f"{request.url_root}static/audio/{audio_filename}"
+    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Play>{audio_url}</Play>
+</Response>"""
+
+    return Response(twiml, mimetype="text/xml")
+
+def ask_gpt(prompt):
+    completion = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are Luna, a helpful and polite AI receptionist who speaks clearly and naturally."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    return completion.choices[0].message["content"]
+
+def synthesize_speech(text):
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
+    headers = {
+        "xi-api-key": ELEVENLABS_API_KEY,
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "text": text,
+        "model_id": "eleven_monolingual_v1",  # ✅ Confirmed as current as of 2025
+        "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.8
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+
+    if response.status_code != 200:
+        raise Exception(f"ElevenLabs API error: {response.text}")
+
+    filename = f"{uuid.uuid4().hex}.mp3"
+    path = os.path.join(AUDIO_DIR, filename)
+    with open(path, "wb") as f:
+        f.write(response.content)
+
+    return filename
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(debug=True)
