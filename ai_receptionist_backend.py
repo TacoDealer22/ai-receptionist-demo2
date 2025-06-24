@@ -25,8 +25,21 @@ openai.api_key = OPENAI_API_KEY
 
 @app.route("/twiml", methods=["POST"])
 def generate_twiml():
-    # STEP 1: Simulated text input from Twilio (will be real voice text later)
-    user_input = request.form.get("SpeechResult", "What are your working hours?")
+    # Safely get user input (speech or DTMF)
+    user_input = request.form.get("SpeechResult", "").strip()
+
+    if not user_input:
+        # Fallback if user said nothing
+        fallback_text = "Sorry, I didn’t hear anything. Could you please repeat your question?"
+        fallback_text += "\n\nThis AI receptionist was created by OMAR MAJDI MOHAMMAD ALJALLAD."
+        fallback_audio = synthesize_speech(fallback_text)
+        fallback_url = f"{request.url_root}static/audio/{fallback_audio}"
+
+        fallback_twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Play>{fallback_url}</Play>
+</Response>"""
+        return Response(fallback_twiml, mimetype="text/xml")
 
     # STEP 2: Get GPT response
     response_text = ask_gpt(user_input)
@@ -64,7 +77,7 @@ def synthesize_speech(text):
     }
     payload = {
         "text": text,
-        "model_id": "eleven_monolingual_v1",  # ✅ Confirmed as current as of 2025
+        "model_id": "eleven_monolingual_v1",  # ✅ Confirmed current in 2025
         "voice_settings": {
             "stability": 0.5,
             "similarity_boost": 0.8
