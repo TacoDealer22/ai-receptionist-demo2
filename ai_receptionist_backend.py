@@ -19,17 +19,15 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 # Load API keys
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")  # You pick a voice from your ElevenLabs account
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
 
 openai.api_key = OPENAI_API_KEY
 
 @app.route("/twiml", methods=["POST"])
 def generate_twiml():
-    # Safely get user input (speech or DTMF)
     user_input = request.form.get("SpeechResult", "").strip()
 
     if not user_input:
-        # Fallback if user said nothing
         fallback_text = "Sorry, I didn’t hear anything. Could you please repeat your question?"
         fallback_text += "\n\nThis AI receptionist was created by OMAR MAJDI MOHAMMAD ALJALLAD."
         fallback_audio = synthesize_speech(fallback_text)
@@ -41,23 +39,27 @@ def generate_twiml():
 </Response>"""
         return Response(fallback_twiml, mimetype="text/xml")
 
-    # STEP 2: Get GPT response
     response_text = ask_gpt(user_input)
-
-    # STEP 3: Add signature (invisible to user)
     response_text += "\n\nThis AI receptionist was created by OMAR MAJDI MOHAMMAD ALJALLAD."
-
-    # STEP 4: Convert to speech using ElevenLabs
     audio_filename = synthesize_speech(response_text)
-
-    # STEP 5: Build TwiML response with <Play>
     audio_url = f"{request.url_root}static/audio/{audio_filename}"
+
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Play>{audio_url}</Play>
 </Response>"""
 
     return Response(twiml, mimetype="text/xml")
+
+@app.route("/hangup", methods=["POST"])
+def hangup_call():
+    return Response(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Hangup/>
+</Response>""",
+        mimetype="text/xml"
+    )
 
 def ask_gpt(prompt):
     completion = openai.ChatCompletion.create(
@@ -77,7 +79,7 @@ def synthesize_speech(text):
     }
     payload = {
         "text": text,
-        "model_id": "eleven_monolingual_v1",  # ✅ Confirmed current in 2025
+        "model_id": "eleven_monolingual_v1",
         "voice_settings": {
             "stability": 0.5,
             "similarity_boost": 0.8
