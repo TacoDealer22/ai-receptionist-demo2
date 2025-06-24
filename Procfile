@@ -1,1 +1,1 @@
-web: gunicorn ai_receptionist_backend:app
+web: gunicorn app:app --timeout 120
