@@ -19,7 +19,7 @@ ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
 
 openai.api_key = OPENAI_API_KEY
 
-# Static Q&A (exact matches only, lowercase)
+# Static Q&A database
 STATIC_RESPONSES = {
     "what are your working hours?": "We’re open from 9 AM to 6 PM, Sunday to Thursday.",
     "what are your business hours?": "We operate Sunday through Thursday, from 9 in the morning to 6 in the evening.",
@@ -46,7 +46,6 @@ def generate_twiml():
         audio_file = synthesize_speech(fallback_text)
         return twiml_response(audio_file, redirect="/hangup")
 
-    # Lowercase question match
     user_question = user_input.lower()
     if user_question in STATIC_RESPONSES:
         answer = STATIC_RESPONSES[user_question]
