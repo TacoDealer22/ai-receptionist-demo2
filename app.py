@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 from flask_cors import CORS
-import openai  # ✅ fixed import for OpenAI v1.27.0+
+import openai
+print("✅ OpenAI SDK Version:", openai.__version__)
 
 # Load environment variables
 load_dotenv()
@@ -98,20 +99,18 @@ def generate_token():
     token.add_grant(voice_grant)
     return jsonify({"token": token.to_jwt()})
 
-from openai import OpenAI
-
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def ask_gpt(prompt):
     try:
-        response = openai_client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are Luna, a helpful, natural, friendly AI receptionist. Answer clearly and kindly. If the user asks about services or general knowledge, answer like a real assistant."},
                 {"role": "user", "content": prompt}
             ]
         )
-        return response.choices[0].message.content.strip()
+        return response['choices'][0]['message']['content'].strip()
     except Exception as e:
         print(f"❌ GPT error: {e}")
         return "I'm sorry, I couldn't answer that at the moment. Please try again later."
