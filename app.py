@@ -12,11 +12,9 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Create audio folder
 AUDIO_DIR = "static/audio"
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
-# Load environment variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
@@ -27,7 +25,6 @@ TWILIO_TWIML_APP_SID = os.getenv("TWILIO_TWIML_APP_SID")
 
 openai.api_key = OPENAI_API_KEY
 
-# Static Q&A
 STATIC_RESPONSES = {
     "what are your working hours?": "We’re open from 9 AM to 6 PM, Sunday to Thursday.",
     "what are your business hours?": "We operate Sunday through Thursday, from 9 in the morning to 6 in the evening.",
@@ -46,14 +43,11 @@ STATIC_RESPONSES = {
 def handle_voice():
     greeting = "Hi, this is Luna, your AI receptionist. How can I help you today?"
     audio_file = synthesize_speech(greeting)
-    listening_file = synthesize_speech("I'm listening...")
 
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{request.url_root}static/audio/{audio_file}</Play>
-    <Gather input="speech" action="/twiml" method="POST" timeout="8" speechTimeout="auto">
-        <Play>{request.url_root}static/audio/{listening_file}</Play>
-    </Gather>
+    <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
     <Redirect method="POST">/twiml</Redirect>
 </Response>"""
 
@@ -63,10 +57,10 @@ def generate_twiml():
     print(f"\n🎤 Twilio SpeechResult: {user_input}")
 
     if not user_input:
-        print("⚠️ No input received — using fallback response.")
-        fallback_text = "Sorry, I didn’t hear anything. If you have more questions, please call again."
-        audio_file = synthesize_speech(fallback_text)
-        return twiml_response(audio_file, redirect="/hangup")
+        print("⚠️ No input received — playing 'I'm listening...'")
+        reminder = "I'm listening..."
+        audio_file = synthesize_speech(reminder)
+        return twiml_response(audio_file, redirect="/twiml")
 
     user_question = user_input.lower()
 
