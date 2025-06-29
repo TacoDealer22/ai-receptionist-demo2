@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 from flask_cors import CORS
-import openai  # ✅ FIXED: old 'from openai import OpenAI' was causing crashes
+import openai  # ✅ fixed import for OpenAI v1.27.0+
 
 # Load environment variables
 load_dotenv()
@@ -17,7 +17,7 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 AUDIO_DIR = "static/audio"
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
-# API keys and settings
+# Keys
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
@@ -26,7 +26,7 @@ TWILIO_API_KEY = os.getenv("TWILIO_API_KEY")
 TWILIO_API_SECRET = os.getenv("TWILIO_API_SECRET")
 TWILIO_TWIML_APP_SID = os.getenv("TWILIO_TWIML_APP_SID")
 
-# ✅ FIXED: Initialize OpenAI properly for v1.27.0
+# ✅ Init OpenAI
 openai.api_key = OPENAI_API_KEY
 
 # Static Q&A
@@ -80,11 +80,7 @@ def generate_twiml():
         answer = ask_gpt(user_input)
 
     audio_file = synthesize_speech(answer)
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Play>{request.url_root}static/audio/{audio_file}</Play>
-    <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
-</Response>"""
+    return twiml_response(audio_file)
 
 @app.route("/token", methods=["GET"])
 def generate_token():
@@ -104,10 +100,10 @@ def generate_token():
 
 def ask_gpt(prompt):
     try:
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are Luna, a helpful, natural, friendly AI receptionist. Answer clearly and kindly."},
+                {"role": "system", "content": "You are Luna, a helpful, natural, friendly AI receptionist. Answer clearly and kindly. If the user asks about services or general knowledge, answer like a real assistant."},
                 {"role": "user", "content": prompt}
             ]
         )
