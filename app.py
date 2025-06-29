@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 from flask_cors import CORS
+from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
@@ -25,10 +26,8 @@ TWILIO_API_KEY = os.getenv("TWILIO_API_KEY")
 TWILIO_API_SECRET = os.getenv("TWILIO_API_SECRET")
 TWILIO_TWIML_APP_SID = os.getenv("TWILIO_TWIML_APP_SID")
 
-# Set OpenAI key for SDK v1+
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
-from openai import OpenAI
-openai_client = OpenAI()
+# ✅ Correct OpenAI initialization for SDK v1+
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Static Q&A
 STATIC_RESPONSES = {
@@ -49,16 +48,16 @@ STATIC_RESPONSES = {
 def handle_voice():
     greeting = "Hi, this is Luna, your AI receptionist. How can I help you today?"
     audio_file = synthesize_speech(greeting)
-    return f'''<?xml version="1.0" encoding="UTF-8"?>
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{request.url_root}static/audio/{audio_file}</Play>
     <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
-</Response>'''
+</Response>"""
 
 @app.route("/twiml", methods=["POST"])
 def generate_twiml():
     user_input = request.form.get("SpeechResult", "").strip()
-    print(f"🎤 Twilio SpeechResult: {user_input}")
+    print(f"\n🎤 Twilio SpeechResult: {user_input}")
 
     if not user_input:
         fallback = "I didn’t catch that. You can ask again or say goodbye to end the call."
@@ -69,21 +68,23 @@ def generate_twiml():
     if any(bye in user_question for bye in ["bye", "goodbye", "see you", "ma3 alsalama"]):
         goodbye = "Thank you for calling. Goodbye!"
         audio_file = synthesize_speech(goodbye)
-        return f'''<?xml version="1.0" encoding="UTF-8"?>
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{request.url_root}static/audio/{audio_file}</Play>
     <Hangup/>
-</Response>'''
+</Response>"""
 
-    # First try static response
-    answer = STATIC_RESPONSES.get(user_question)
-
-    # If no static match, use GPT
-    if not answer:
+    if user_question in STATIC_RESPONSES:
+        answer = STATIC_RESPONSES[user_question]
+    else:
         answer = ask_gpt(user_input)
 
     audio_file = synthesize_speech(answer)
-    return twiml_response(audio_file)
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Play>{request.url_root}static/audio/{audio_file}</Play>
+    <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
+</Response>"""
 
 @app.route("/token", methods=["GET"])
 def generate_token():
@@ -106,7 +107,7 @@ def ask_gpt(prompt):
         response = openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are Luna, a helpful and friendly AI receptionist. Answer clearly and kindly."},
+                {"role": "system", "content": "You are Luna, a helpful, natural, friendly AI receptionist. Answer clearly and kindly."},
                 {"role": "user", "content": prompt}
             ]
         )
@@ -115,7 +116,6 @@ def ask_gpt(prompt):
         print(f"❌ GPT error: {e}")
         return "I'm sorry, I couldn't answer that at the moment. Please try again later."
 
-# ElevenLabs Text-to-Speech
 AUDIO_CACHE = {}
 def synthesize_speech(text):
     if text in AUDIO_CACHE:
@@ -149,11 +149,11 @@ def synthesize_speech(text):
 
 def twiml_response(filename):
     url = f"{request.url_root}static/audio/{filename}"
-    return f'''<?xml version="1.0" encoding="UTF-8"?>
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{url}</Play>
     <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
-</Response>'''
+</Response>"""
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
