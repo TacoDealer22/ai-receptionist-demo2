@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 from flask_cors import CORS
-from openai import OpenAI
+import openai  # ✅ FIXED: old 'from openai import OpenAI' was causing crashes
 
 # Load environment variables
 load_dotenv()
@@ -26,8 +26,8 @@ TWILIO_API_KEY = os.getenv("TWILIO_API_KEY")
 TWILIO_API_SECRET = os.getenv("TWILIO_API_SECRET")
 TWILIO_TWIML_APP_SID = os.getenv("TWILIO_TWIML_APP_SID")
 
-# ✅ Correct OpenAI initialization for SDK v1+
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
+# ✅ FIXED: Initialize OpenAI properly for v1.27.0
+openai.api_key = OPENAI_API_KEY
 
 # Static Q&A
 STATIC_RESPONSES = {
@@ -104,7 +104,7 @@ def generate_token():
 
 def ask_gpt(prompt):
     try:
-        response = openai_client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are Luna, a helpful, natural, friendly AI receptionist. Answer clearly and kindly."},
