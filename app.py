@@ -98,9 +98,13 @@ def generate_token():
     token.add_grant(voice_grant)
     return jsonify({"token": token.to_jwt()})
 
+from openai import OpenAI
+
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 def ask_gpt(prompt):
     try:
-        response = openai.chat.completions.create(
+        response = openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are Luna, a helpful, natural, friendly AI receptionist. Answer clearly and kindly. If the user asks about services or general knowledge, answer like a real assistant."},
