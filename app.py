@@ -164,11 +164,11 @@ def debug_version():
     import openai
     return f"✅ OpenAI version: {openai.__version__}"
 
-@app.route("/pip-freeze")
-def pip_freeze():
-    import subprocess
-    output = subprocess.check_output(['pip', 'freeze']).decode()
-    return f"<pre>{output}</pre>"
+@app.route("/envall")
+def envall():
+    import os
+    return "<pre>" + "\n".join([f"{k}={v}" for k, v in os.environ.items()]) + "</pre>"
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
