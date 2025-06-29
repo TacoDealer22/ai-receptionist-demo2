@@ -93,7 +93,7 @@ def ask_gpt(prompt):
         response = openai.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are Luna, a helpful AI receptionist. Answer clearly, kindly, and naturally."},
+                {"role": "system", "content": "You are Luna, a helpful AI receptionist. Answer clearly and naturally."},
                 {"role": "user", "content": prompt}
             ]
         )
@@ -101,6 +101,7 @@ def ask_gpt(prompt):
     except Exception as e:
         print(f"❌ GPT error: {e}")
         return "I'm sorry, I couldn't answer that at the moment. Please try again later."
+
 
 # ElevenLabs TTS
 AUDIO_CACHE = {}
