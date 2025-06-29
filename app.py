@@ -6,14 +6,15 @@ from dotenv import load_dotenv
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 from flask_cors import CORS
-import openai  # ✅ Correct import for v1.27.0
+import openai  # ✅ Correct for v1.27.0
 
-# Load environment variables
+# Load env
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
+# Ensure audio dir
 AUDIO_DIR = "static/audio"
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
@@ -26,9 +27,10 @@ TWILIO_API_KEY = os.getenv("TWILIO_API_KEY")
 TWILIO_API_SECRET = os.getenv("TWILIO_API_SECRET")
 TWILIO_TWIML_APP_SID = os.getenv("TWILIO_TWIML_APP_SID")
 
-# Set OpenAI key for SDK v1.27.0
+# Set OpenAI key (SDK v1.27.0)
 openai.api_key = OPENAI_API_KEY
 
+# Static Q&A
 STATIC_RESPONSES = {
     "what are your working hours?": "We’re open from 9 AM to 6 PM, Sunday to Thursday.",
     "what are your business hours?": "We operate Sunday through Thursday, from 9 in the morning to 6 in the evening.",
@@ -85,12 +87,13 @@ def token():
     token.add_grant(voice_grant)
     return jsonify({"token": token.to_jwt()})
 
+# ✅ GPT fallback (v1.27.0 syntax only)
 def ask_gpt(prompt):
     try:
         response = openai.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are Luna, a helpful AI receptionist. Answer clearly and naturally."},
+                {"role": "system", "content": "You are Luna, a helpful AI receptionist. Answer clearly, kindly, and naturally."},
                 {"role": "user", "content": prompt}
             ]
         )
@@ -99,6 +102,7 @@ def ask_gpt(prompt):
         print(f"❌ GPT error: {e}")
         return "I'm sorry, I couldn't answer that at the moment. Please try again later."
 
+# ElevenLabs TTS
 AUDIO_CACHE = {}
 def synthesize_speech(text):
     if text in AUDIO_CACHE:
@@ -137,6 +141,11 @@ def twiml_response(filename):
     <Play>{request.url_root}static/audio/{filename}</Play>
     <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
 </Response>"""
+
+# ✅ Test route to confirm GPT answers
+@app.route("/test-gpt")
+def test_gpt():
+    return ask_gpt("Who is the King of Jordan?")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
