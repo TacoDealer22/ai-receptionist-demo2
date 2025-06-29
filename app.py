@@ -6,19 +6,20 @@ from dotenv import load_dotenv
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 from flask_cors import CORS
-import openai
-print("✅ OpenAI SDK Version:", openai.__version__)
+from openai import OpenAI  # ✅ correct for SDK v1.27.0
 
-# Load environment variables
+# Load .env variables from Render environment
 load_dotenv()
 
+# Init Flask app
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
+# Ensure audio folder exists
 AUDIO_DIR = "static/audio"
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
-# Keys
+# Environment variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
@@ -27,8 +28,8 @@ TWILIO_API_KEY = os.getenv("TWILIO_API_KEY")
 TWILIO_API_SECRET = os.getenv("TWILIO_API_SECRET")
 TWILIO_TWIML_APP_SID = os.getenv("TWILIO_TWIML_APP_SID")
 
-# ✅ Init OpenAI
-openai.api_key = OPENAI_API_KEY
+# Init OpenAI client
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Static Q&A
 STATIC_RESPONSES = {
@@ -99,9 +100,10 @@ def generate_token():
     token.add_grant(voice_grant)
     return jsonify({"token": token.to_jwt()})
 
+# ✅ Smart AI GPT response
 def ask_gpt(prompt):
     try:
-        response = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are Luna, a helpful, natural, friendly AI receptionist. Answer clearly and kindly. If the user asks about services or general knowledge, answer like a real assistant."},
@@ -113,7 +115,7 @@ def ask_gpt(prompt):
         print(f"❌ GPT error: {e}")
         return "I'm sorry, I couldn't answer that at the moment. Please try again later."
 
-
+# 🎤 ElevenLabs text-to-speech
 AUDIO_CACHE = {}
 def synthesize_speech(text):
     if text in AUDIO_CACHE:
@@ -145,6 +147,7 @@ def synthesize_speech(text):
     AUDIO_CACHE[text] = filename
     return filename
 
+# 🎧 Final TwiML voice response
 def twiml_response(filename):
     url = f"{request.url_root}static/audio/{filename}"
     return f"""<?xml version="1.0" encoding="UTF-8"?>
