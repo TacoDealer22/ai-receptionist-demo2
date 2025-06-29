@@ -15,6 +15,7 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 AUDIO_DIR = "static/audio"
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
+# Environment variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
@@ -25,6 +26,7 @@ TWILIO_TWIML_APP_SID = os.getenv("TWILIO_TWIML_APP_SID")
 
 openai.api_key = OPENAI_API_KEY
 
+# Static Q&A
 STATIC_RESPONSES = {
     "what are your working hours?": "We’re open from 9 AM to 6 PM, Sunday to Thursday.",
     "what are your business hours?": "We operate Sunday through Thursday, from 9 in the morning to 6 in the evening.",
@@ -48,8 +50,14 @@ def handle_voice():
 <Response>
     <Play>{request.url_root}static/audio/{audio_file}</Play>
     <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
-    <Redirect method="POST">/twiml</Redirect>
+    <Redirect method="POST">/timeout</Redirect>
 </Response>"""
+
+@app.route("/timeout", methods=["POST"])
+def handle_timeout():
+    timeout_line = "I'm still here if you need anything."
+    audio_file = synthesize_speech(timeout_line)
+    return twiml_response(audio_file, redirect="/twiml")
 
 @app.route("/twiml", methods=["POST"])
 def generate_twiml():
@@ -57,10 +65,9 @@ def generate_twiml():
     print(f"\n🎤 Twilio SpeechResult: {user_input}")
 
     if not user_input:
-        print("⚠️ No input received — playing 'I'm listening...'")
-        reminder = "I'm listening..."
-        audio_file = synthesize_speech(reminder)
-        return twiml_response(audio_file, redirect="/twiml")
+        fallback = "Sorry, I didn’t hear anything. You can ask again or say goodbye."
+        audio_file = synthesize_speech(fallback)
+        return twiml_response(audio_file, redirect="/next")
 
     user_question = user_input.lower()
 
@@ -75,9 +82,7 @@ def generate_twiml():
 
     if user_question in STATIC_RESPONSES:
         answer = STATIC_RESPONSES[user_question]
-        print(f"✅ Matched static question. Answer: {answer}")
     else:
-        print("🤖 No match found — calling OpenAI for dynamic response.")
         answer = ask_gpt(user_input)
 
     audio_file = synthesize_speech(answer)
@@ -140,7 +145,8 @@ def synthesize_speech(text):
         "model_id": "eleven_monolingual_v1",
         "voice_settings": {
             "stability": 0.5,
-            "similarity_boost": 0.8
+            "similarity_boost": 0.8,
+            "style": "narration"
         }
     }
     response = requests.post(url, headers=headers, json=payload)
@@ -153,15 +159,14 @@ def synthesize_speech(text):
     with open(path, "wb") as f:
         f.write(response.content)
 
-    print(f"✅ Audio saved as: {filename}")
     return filename
 
 def twiml_response(filename, redirect):
     url = f"{request.url_root}static/audio/{filename}"
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Play>{url}</Play>
-  <Redirect method="POST">{redirect}</Redirect>
+    <Play>{url}</Play>
+    <Redirect method="POST">{redirect}</Redirect>
 </Response>"""
 
 if __name__ == "__main__":
