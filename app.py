@@ -1,7 +1,6 @@
 import os
 import uuid
 from flask import Flask, request, Response, jsonify
-import openai
 import requests
 from dotenv import load_dotenv
 from twilio.jwt.access_token import AccessToken
@@ -26,11 +25,12 @@ TWILIO_API_KEY = os.getenv("TWILIO_API_KEY")
 TWILIO_API_SECRET = os.getenv("TWILIO_API_SECRET")
 TWILIO_TWIML_APP_SID = os.getenv("TWILIO_TWIML_APP_SID")
 
-# New OpenAI SDK (v1+)
+# Set OpenAI key for SDK v1+
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 from openai import OpenAI
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
+openai_client = OpenAI()
 
-# Static questions & answers
+# Static Q&A
 STATIC_RESPONSES = {
     "what are your working hours?": "We’re open from 9 AM to 6 PM, Sunday to Thursday.",
     "what are your business hours?": "We operate Sunday through Thursday, from 9 in the morning to 6 in the evening.",
@@ -49,16 +49,16 @@ STATIC_RESPONSES = {
 def handle_voice():
     greeting = "Hi, this is Luna, your AI receptionist. How can I help you today?"
     audio_file = synthesize_speech(greeting)
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
+    return f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{request.url_root}static/audio/{audio_file}</Play>
     <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
-</Response>"""
+</Response>'''
 
 @app.route("/twiml", methods=["POST"])
 def generate_twiml():
     user_input = request.form.get("SpeechResult", "").strip()
-    print(f"\n🎤 Twilio SpeechResult: {user_input}")
+    print(f"🎤 Twilio SpeechResult: {user_input}")
 
     if not user_input:
         fallback = "I didn’t catch that. You can ask again or say goodbye to end the call."
@@ -69,23 +69,21 @@ def generate_twiml():
     if any(bye in user_question for bye in ["bye", "goodbye", "see you", "ma3 alsalama"]):
         goodbye = "Thank you for calling. Goodbye!"
         audio_file = synthesize_speech(goodbye)
-        return f"""<?xml version="1.0" encoding="UTF-8"?>
+        return f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{request.url_root}static/audio/{audio_file}</Play>
     <Hangup/>
-</Response>"""
+</Response>'''
 
-    if user_question in STATIC_RESPONSES:
-        answer = STATIC_RESPONSES[user_question]
-    else:
+    # First try static response
+    answer = STATIC_RESPONSES.get(user_question)
+
+    # If no static match, use GPT
+    if not answer:
         answer = ask_gpt(user_input)
 
     audio_file = synthesize_speech(answer)
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Play>{request.url_root}static/audio/{audio_file}</Play>
-    <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
-</Response>"""
+    return twiml_response(audio_file)
 
 @app.route("/token", methods=["GET"])
 def generate_token():
@@ -108,7 +106,7 @@ def ask_gpt(prompt):
         response = openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are Luna, a helpful, natural, friendly AI receptionist. Answer clearly and kindly."},
+                {"role": "system", "content": "You are Luna, a helpful and friendly AI receptionist. Answer clearly and kindly."},
                 {"role": "user", "content": prompt}
             ]
         )
@@ -117,7 +115,7 @@ def ask_gpt(prompt):
         print(f"❌ GPT error: {e}")
         return "I'm sorry, I couldn't answer that at the moment. Please try again later."
 
-# Optional caching logic for faster responses
+# ElevenLabs Text-to-Speech
 AUDIO_CACHE = {}
 def synthesize_speech(text):
     if text in AUDIO_CACHE:
@@ -151,11 +149,11 @@ def synthesize_speech(text):
 
 def twiml_response(filename):
     url = f"{request.url_root}static/audio/{filename}"
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
+    return f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{url}</Play>
     <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
-</Response>"""
+</Response>'''
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
