@@ -8,7 +8,6 @@ from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 
 load_dotenv()
-
 app = Flask(__name__)
 
 # Create audio folder
@@ -19,7 +18,6 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
-
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_API_KEY = os.getenv("TWILIO_API_KEY")
 TWILIO_API_SECRET = os.getenv("TWILIO_API_SECRET")
@@ -41,6 +39,12 @@ STATIC_RESPONSES = {
     "can i speak to someone?": "I’ll forward your request. Please leave your name and message after the tone.",
     "can you call me back?": "I’ll forward your request. Please leave your name and number after the tone."
 }
+
+@app.route("/voice", methods=["POST"])
+def handle_voice():
+    greeting = "Hi, this is Luna, your AI receptionist. How can I help you today?"
+    audio_file = synthesize_speech(greeting)
+    return twiml_response(audio_file, redirect="/twiml")
 
 @app.route("/twiml", methods=["POST"])
 def generate_twiml():
