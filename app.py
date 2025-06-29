@@ -6,8 +6,7 @@ from dotenv import load_dotenv
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 from flask_cors import CORS
-
-# Remove global proxies (leave as-is)
+import os
 os.environ.pop("HTTP_PROXY", None)
 os.environ.pop("HTTPS_PROXY", None)
 os.environ.pop("ALL_PROXY", None)
@@ -15,7 +14,7 @@ os.environ.pop("http_proxy", None)
 os.environ.pop("https_proxy", None)
 os.environ.pop("all_proxy", None)
 
-import openai  # ✅ Correct for v1.27.0+
+import openai  # ✅ Correct for v1.27.0
 
 # Load env
 load_dotenv()
@@ -36,8 +35,8 @@ TWILIO_API_KEY = os.getenv("TWILIO_API_KEY")
 TWILIO_API_SECRET = os.getenv("TWILIO_API_SECRET")
 TWILIO_TWIML_APP_SID = os.getenv("TWILIO_TWIML_APP_SID")
 
-# ---- FIX: Use OpenAI Client (DO NOT set openai.api_key!)
-gpt_client = openai.OpenAI(api_key=OPENAI_API_KEY)
+# Set OpenAI key (SDK v1.27.0)
+openai.api_key = OPENAI_API_KEY
 
 # Static Q&A
 STATIC_RESPONSES = {
@@ -96,10 +95,10 @@ def token():
     token.add_grant(voice_grant)
     return jsonify({"token": token.to_jwt()})
 
-# ---- FIXED: GPT fallback (for openai 1.x)
+# ✅ GPT fallback (v1.27.0 syntax only)
 def ask_gpt(prompt):
     try:
-        response = gpt_client.chat.completions.create(
+        response = openai.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are Luna, a helpful AI receptionist. Answer clearly and naturally."},
@@ -110,8 +109,10 @@ def ask_gpt(prompt):
     except Exception as e:
         import traceback
         print("❌ GPT error:", e)
-        traceback.print_exc()
+        traceback.print_exc()  # <-- This will print the full stack trace in your Render logs!
         return "I'm sorry, I couldn't answer that at the moment. Please try again later."
+
+
 
 # ElevenLabs TTS
 AUDIO_CACHE = {}
@@ -153,7 +154,7 @@ def twiml_response(filename):
     <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
 </Response>"""
 
-# Test route to confirm GPT answers
+# ✅ Test route to confirm GPT answers
 @app.route("/test-gpt")
 def test_gpt():
     return ask_gpt("Who is the King of Jordan?")
@@ -168,7 +169,7 @@ def envall():
     import os
     return "<pre>" + "\n".join([f"{k}={v}" for k, v in os.environ.items()]) + "</pre>"
 
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-    
