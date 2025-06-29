@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 from flask_cors import CORS
+import hashlib
 
 load_dotenv()
 app = Flask(__name__)
@@ -24,7 +25,8 @@ TWILIO_API_KEY = os.getenv("TWILIO_API_KEY")
 TWILIO_API_SECRET = os.getenv("TWILIO_API_SECRET")
 TWILIO_TWIML_APP_SID = os.getenv("TWILIO_TWIML_APP_SID")
 
-openai.api_key = OPENAI_API_KEY
+# Updated OpenAI client
+openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # Static Q&A
 STATIC_RESPONSES = {
@@ -101,7 +103,7 @@ def generate_token():
 
 def ask_gpt(prompt):
     try:
-        response = openai.chat.completions.create(
+        response = openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are Luna, a helpful, natural, friendly AI receptionist. Answer questions clearly."},
@@ -114,6 +116,14 @@ def ask_gpt(prompt):
         return "I’m sorry, I didn’t understand that. Could you please repeat it?"
 
 def synthesize_speech(text):
+    # Create a hash of the text to use as filename (for caching)
+    text_hash = hashlib.md5(text.encode()).hexdigest()
+    cached_file = f"{text_hash}.mp3"
+    cached_path = os.path.join(AUDIO_DIR, cached_file)
+
+    if os.path.exists(cached_path):
+        return cached_file
+
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
     headers = {
         "xi-api-key": ELEVENLABS_API_KEY,
@@ -132,12 +142,10 @@ def synthesize_speech(text):
         print("❌ ElevenLabs API error:", response.text)
         raise Exception("ElevenLabs failed")
 
-    filename = f"{uuid.uuid4().hex}.mp3"
-    path = os.path.join(AUDIO_DIR, filename)
-    with open(path, "wb") as f:
+    with open(cached_path, "wb") as f:
         f.write(response.content)
 
-    return filename
+    return cached_file
 
 def twiml_response(filename):
     url = f"{request.url_root}static/audio/{filename}"
