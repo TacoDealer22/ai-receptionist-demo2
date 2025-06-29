@@ -147,6 +147,16 @@ def twiml_response(filename):
 def test_gpt():
     return ask_gpt("Who is the King of Jordan?")
 
+@app.route("/debug-openai")
+def debug_openai():
+    try:
+        print("🔍 OPENAI KEY:", OPENAI_API_KEY[:8])  # show partial for safety
+        print("✅ openai.api_key:", openai.api_key[:8])
+        response = openai.models.list()
+        return jsonify({"models": [m.id for m in response.data]})
+    except Exception as e:
+        return f"❌ OpenAI ERROR: {e}"
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
