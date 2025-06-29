@@ -101,8 +101,9 @@ def ask_gpt(prompt):
     except Exception as e:
         import traceback
         print("❌ GPT error:", e)
-        traceback.print_exc()
+        traceback.print_exc()  # <-- This will print the full stack trace in your Render logs!
         return "I'm sorry, I couldn't answer that at the moment. Please try again later."
+
 
 
 # ElevenLabs TTS
