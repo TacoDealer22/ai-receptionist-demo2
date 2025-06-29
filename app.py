@@ -145,8 +145,7 @@ def synthesize_speech(text):
         "model_id": "eleven_monolingual_v1",
         "voice_settings": {
             "stability": 0.5,
-            "similarity_boost": 0.8,
-            "style": "narration"
+            "similarity_boost": 0.8
         }
     }
     response = requests.post(url, headers=headers, json=payload)
