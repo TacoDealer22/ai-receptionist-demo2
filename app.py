@@ -46,7 +46,16 @@ STATIC_RESPONSES = {
 def handle_voice():
     greeting = "Hi, this is Luna, your AI receptionist. How can I help you today?"
     audio_file = synthesize_speech(greeting)
-    return twiml_response(audio_file, redirect="/twiml")
+    audio_url = f"{request.url_root}static/audio/{audio_file}"
+
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Play>{audio_url}</Play>
+    <Gather input="speech" action="/twiml" method="POST" timeout="6" speechTimeout="auto">
+        <Say>I’m listening...</Say>
+    </Gather>
+    <Redirect method="POST">/hangup</Redirect>
+</Response>"""
 
 @app.route("/twiml", methods=["POST"])
 def generate_twiml():
