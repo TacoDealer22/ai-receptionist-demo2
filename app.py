@@ -1,14 +1,17 @@
 import os
 import uuid
-from flask import Flask, request, Response
+from flask import Flask, request, Response, jsonify
 import openai
 import requests
 from dotenv import load_dotenv
+from twilio.jwt.access_token import AccessToken
+from twilio.jwt.access_token.grants import VoiceGrant
 
 load_dotenv()
 
 app = Flask(__name__)
 
+# Create audio folder
 AUDIO_DIR = "static/audio"
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
@@ -17,9 +20,14 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
 
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_API_KEY = os.getenv("TWILIO_API_KEY")
+TWILIO_API_SECRET = os.getenv("TWILIO_API_SECRET")
+TWILIO_TWIML_APP_SID = os.getenv("TWILIO_TWIML_APP_SID")
+
 openai.api_key = OPENAI_API_KEY
 
-# Static Q&A database
+# Static Q&A
 STATIC_RESPONSES = {
     "what are your working hours?": "We’re open from 9 AM to 6 PM, Sunday to Thursday.",
     "what are your business hours?": "We operate Sunday through Thursday, from 9 in the morning to 6 in the evening.",
@@ -33,7 +41,6 @@ STATIC_RESPONSES = {
     "can i speak to someone?": "I’ll forward your request. Please leave your name and message after the tone.",
     "can you call me back?": "I’ll forward your request. Please leave your name and number after the tone."
 }
-
 
 @app.route("/twiml", methods=["POST"])
 def generate_twiml():
@@ -57,13 +64,11 @@ def generate_twiml():
     audio_file = synthesize_speech(answer)
     return twiml_response(audio_file, redirect="/next")
 
-
 @app.route("/next", methods=["POST"])
 def prompt_next():
     prompt = "You can ask another question, or say goodbye to end the call."
     audio_file = synthesize_speech(prompt)
     return twiml_response(audio_file, redirect="/twiml")
-
 
 @app.route("/hangup", methods=["POST"])
 def hangup_call():
@@ -75,6 +80,21 @@ def hangup_call():
     <Hangup/>
 </Response>"""
 
+@app.route("/token", methods=["GET"])
+def generate_token():
+    identity = "browser_user"
+    token = AccessToken(
+        TWILIO_ACCOUNT_SID,
+        TWILIO_API_KEY,
+        TWILIO_API_SECRET,
+        identity=identity
+    )
+    voice_grant = VoiceGrant(
+        outgoing_application_sid=TWILIO_TWIML_APP_SID,
+        incoming_allow=True
+    )
+    token.add_grant(voice_grant)
+    return jsonify({"token": token.to_jwt().decode()})
 
 def ask_gpt(prompt):
     try:
@@ -90,7 +110,6 @@ def ask_gpt(prompt):
         print(f"❌ OpenAI error: {e}")
         return "I'm sorry, I couldn't process your request right now."
 
-
 def synthesize_speech(text):
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
     headers = {
@@ -105,7 +124,6 @@ def synthesize_speech(text):
             "similarity_boost": 0.8
         }
     }
-
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code != 200:
         print("❌ ElevenLabs API error:", response.text)
@@ -119,7 +137,6 @@ def synthesize_speech(text):
     print(f"✅ Audio saved as: {filename}")
     return filename
 
-
 def twiml_response(filename, redirect):
     url = f"{request.url_root}static/audio/{filename}"
     return f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -127,7 +144,6 @@ def twiml_response(filename, redirect):
   <Play>{url}</Play>
   <Redirect method="POST">{redirect}</Redirect>
 </Response>"""
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
