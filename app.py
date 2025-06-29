@@ -99,8 +99,6 @@ def generate_token():
     token.add_grant(voice_grant)
     return jsonify({"token": token.to_jwt()})
 
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
 def ask_gpt(prompt):
     try:
         response = openai.ChatCompletion.create(
@@ -110,10 +108,11 @@ def ask_gpt(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        return response['choices'][0]['message']['content'].strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"❌ GPT error: {e}")
         return "I'm sorry, I couldn't answer that at the moment. Please try again later."
+
 
 AUDIO_CACHE = {}
 def synthesize_speech(text):
