@@ -49,14 +49,7 @@ def handle_voice():
 <Response>
     <Play>{request.url_root}static/audio/{audio_file}</Play>
     <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
-    <Redirect method="POST">/timeout</Redirect>
 </Response>"""
-
-@app.route("/timeout", methods=["POST"])
-def handle_timeout():
-    timeout_line = "I'm still here if you need anything."
-    audio_file = synthesize_speech(timeout_line)
-    return twiml_response(audio_file, redirect="/twiml")
 
 @app.route("/twiml", methods=["POST"])
 def generate_twiml():
@@ -64,12 +57,11 @@ def generate_twiml():
     print(f"\n🎤 Twilio SpeechResult: {user_input}")
 
     if not user_input:
-        fallback = "Sorry, I didn’t hear anything. You can ask again or say goodbye."
+        fallback = "I didn’t catch that. You can ask again or say goodbye to end the call."
         audio_file = synthesize_speech(fallback)
-        return twiml_response(audio_file, redirect="/next")
+        return twiml_response(audio_file)
 
     user_question = user_input.lower()
-
     if any(bye in user_question for bye in ["bye", "goodbye", "see you", "ma3 alsalama"]):
         goodbye = "Thank you for calling. Goodbye!"
         audio_file = synthesize_speech(goodbye)
@@ -79,34 +71,16 @@ def generate_twiml():
     <Hangup/>
 </Response>"""
 
-    # Try to match a known static question (fuzzy match)
-    answer = None
-    for known_question, response in STATIC_RESPONSES.items():
-        if known_question in user_question:
-            answer = response
-            break
-
-    # Fallback to GPT if no static match found
-    if not answer:
+    if user_question in STATIC_RESPONSES:
+        answer = STATIC_RESPONSES[user_question]
+    else:
         answer = ask_gpt(user_input)
 
     audio_file = synthesize_speech(answer)
-    return twiml_response(audio_file, redirect="/next")
-
-@app.route("/next", methods=["POST"])
-def prompt_next():
-    prompt = "You can ask another question, or say goodbye to end the call."
-    audio_file = synthesize_speech(prompt)
-    return twiml_response(audio_file, redirect="/twiml")
-
-@app.route("/hangup", methods=["POST"])
-def hangup_call():
-    goodbye = "Thank you for calling. Goodbye!"
-    audio_file = synthesize_speech(goodbye)
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{request.url_root}static/audio/{audio_file}</Play>
-    <Hangup/>
+    <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
 </Response>"""
 
 @app.route("/token", methods=["GET"])
@@ -130,14 +104,14 @@ def ask_gpt(prompt):
         response = openai.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are Luna, an AI receptionist who answers general questions, business info, and provides helpful, friendly guidance."},
+                {"role": "system", "content": "You are Luna, a helpful, natural, friendly AI receptionist. Answer questions clearly."},
                 {"role": "user", "content": prompt}
             ]
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"❌ OpenAI error: {e}")
-        return "I'm sorry, I couldn't process your request right now."
+        print(f"❌ GPT error: {e}")
+        return "I’m sorry, I didn’t understand that. Could you please repeat it?"
 
 def synthesize_speech(text):
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
@@ -150,7 +124,8 @@ def synthesize_speech(text):
         "model_id": "eleven_monolingual_v1",
         "voice_settings": {
             "stability": 0.5,
-            "similarity_boost": 0.8
+            "similarity_boost": 0.8,
+            "style": "narration"
         }
     }
     response = requests.post(url, headers=headers, json=payload)
@@ -165,12 +140,12 @@ def synthesize_speech(text):
 
     return filename
 
-def twiml_response(filename, redirect):
+def twiml_response(filename):
     url = f"{request.url_root}static/audio/{filename}"
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{url}</Play>
-    <Redirect method="POST">{redirect}</Redirect>
+    <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
 </Response>"""
 
 if __name__ == "__main__":
