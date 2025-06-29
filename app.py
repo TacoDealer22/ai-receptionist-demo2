@@ -26,7 +26,6 @@ TWILIO_TWIML_APP_SID = os.getenv("TWILIO_TWIML_APP_SID")
 
 openai.api_key = OPENAI_API_KEY
 
-# Static Q&A
 STATIC_RESPONSES = {
     "what are your working hours?": "We’re open from 9 AM to 6 PM, Sunday to Thursday.",
     "what are your business hours?": "We operate Sunday through Thursday, from 9 in the morning to 6 in the evening.",
@@ -45,33 +44,35 @@ STATIC_RESPONSES = {
 def handle_voice():
     greeting = "Hi, this is Luna, your AI receptionist. How can I help you today?"
     audio_file = synthesize_speech(greeting)
-
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{request.url_root}static/audio/{audio_file}</Play>
-    <Gather input="speech" action="/twiml" method="POST" timeout="300" speechTimeout="auto"/>
+    <Gather input="speech" action="/twiml" method="POST" timeout="10" speechTimeout="auto" />
     <Redirect method="POST">/timeout</Redirect>
 </Response>"""
 
 @app.route("/timeout", methods=["POST"])
 def handle_timeout():
-    timeout_line = "I'm still here if you need anything."
-    audio_file = synthesize_speech(timeout_line)
-    return twiml_response(audio_file, redirect="/twiml")
+    line = "I didn’t catch anything. You can ask again or say goodbye to end the call."
+    audio_file = synthesize_speech(line)
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Play>{request.url_root}static/audio/{audio_file}</Play>
+    <Gather input="speech" action="/twiml" method="POST" timeout="10" speechTimeout="auto" />
+    <Redirect method="POST">/timeout</Redirect>
+</Response>"""
 
 @app.route("/twiml", methods=["POST"])
-def generate_twiml():
+def handle_twiml():
     user_input = request.form.get("SpeechResult", "").strip()
-    print(f"\n🎤 Twilio SpeechResult: {user_input}")
+    print(f"🎤 User said: {user_input}")
 
     if not user_input:
-        fallback = "Sorry, I didn’t hear anything. You can ask again or say goodbye."
+        fallback = "Sorry, I didn’t hear anything. Please try again."
         audio_file = synthesize_speech(fallback)
-        return twiml_response(audio_file, redirect="/next")
+        return twiml_response(audio_file, redirect="/twiml")
 
-    user_question = user_input.lower()
-
-    if any(bye in user_question for bye in ["bye", "goodbye", "see you", "ma3 alsalama"]):
+    if any(bye in user_input.lower() for bye in ["bye", "goodbye", "ma3 alsalama", "see you"]):
         goodbye = "Thank you for calling. Goodbye!"
         audio_file = synthesize_speech(goodbye)
         return f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -80,28 +81,13 @@ def generate_twiml():
     <Hangup/>
 </Response>"""
 
-    if user_question in STATIC_RESPONSES:
-        answer = STATIC_RESPONSES[user_question]
-    else:
-        answer = ask_gpt(user_input)
-
+    answer = STATIC_RESPONSES.get(user_input.lower(), ask_gpt(user_input))
     audio_file = synthesize_speech(answer)
-    return twiml_response(audio_file, redirect="/next")
-
-@app.route("/next", methods=["POST"])
-def prompt_next():
-    prompt = "You can ask another question, or say goodbye to end the call."
-    audio_file = synthesize_speech(prompt)
-    return twiml_response(audio_file, redirect="/twiml")
-
-@app.route("/hangup", methods=["POST"])
-def hangup_call():
-    goodbye = "Thank you for calling. Goodbye!"
-    audio_file = synthesize_speech(goodbye)
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{request.url_root}static/audio/{audio_file}</Play>
-    <Hangup/>
+    <Gather input="speech" action="/twiml" method="POST" timeout="10" speechTimeout="auto"/>
+    <Redirect method="POST">/timeout</Redirect>
 </Response>"""
 
 @app.route("/token", methods=["GET"])
@@ -113,26 +99,23 @@ def generate_token():
         TWILIO_API_SECRET,
         identity=identity
     )
-    voice_grant = VoiceGrant(
-        outgoing_application_sid=TWILIO_TWIML_APP_SID,
-        incoming_allow=True
-    )
+    voice_grant = VoiceGrant(outgoing_application_sid=TWILIO_TWIML_APP_SID, incoming_allow=True)
     token.add_grant(voice_grant)
     return jsonify({"token": token.to_jwt()})
 
 def ask_gpt(prompt):
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+        response = openai.chat.completions.create(
+            model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are Luna, a helpful AI receptionist."},
+                {"role": "system", "content": "You are Luna, a helpful AI receptionist speaking clearly and kindly."},
                 {"role": "user", "content": prompt}
             ]
         )
-        return response.choices[0].message["content"]
+        return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"❌ OpenAI error: {e}")
-        return "I'm sorry, I couldn't process your request right now."
+        print("❌ GPT error:", e)
+        return "I'm sorry, I couldn't answer that right now."
 
 def synthesize_speech(text):
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
@@ -150,14 +133,13 @@ def synthesize_speech(text):
     }
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code != 200:
-        print("❌ ElevenLabs API error:", response.text)
+        print("❌ ElevenLabs error:", response.text)
         raise Exception("ElevenLabs failed")
-
+    
     filename = f"{uuid.uuid4().hex}.mp3"
     path = os.path.join(AUDIO_DIR, filename)
     with open(path, "wb") as f:
         f.write(response.content)
-
     return filename
 
 def twiml_response(filename, redirect):
@@ -169,5 +151,4 @@ def twiml_response(filename, redirect):
 </Response>"""
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
