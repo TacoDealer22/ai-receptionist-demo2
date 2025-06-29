@@ -1,6 +1,5 @@
 import os
 import uuid
-import hashlib
 from flask import Flask, request, Response, jsonify
 import openai
 import requests
@@ -9,14 +8,16 @@ from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 from flask_cors import CORS
 
+# Load environment variables
 load_dotenv()
+
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 AUDIO_DIR = "static/audio"
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
-# Environment variables
+# API keys and settings
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
@@ -25,10 +26,11 @@ TWILIO_API_KEY = os.getenv("TWILIO_API_KEY")
 TWILIO_API_SECRET = os.getenv("TWILIO_API_SECRET")
 TWILIO_TWIML_APP_SID = os.getenv("TWILIO_TWIML_APP_SID")
 
-# ✅ Set OpenAI key the old safe way
-openai.api_key = OPENAI_API_KEY
+# New OpenAI SDK (v1+)
+from openai import OpenAI
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Static Q&A
+# Static questions & answers
 STATIC_RESPONSES = {
     "what are your working hours?": "We’re open from 9 AM to 6 PM, Sunday to Thursday.",
     "what are your business hours?": "We operate Sunday through Thursday, from 9 in the morning to 6 in the evening.",
@@ -103,25 +105,23 @@ def generate_token():
 
 def ask_gpt(prompt):
     try:
-        response = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are Luna, a helpful, natural, friendly AI receptionist. Answer questions clearly."},
+                {"role": "system", "content": "You are Luna, a helpful, natural, friendly AI receptionist. Answer clearly and kindly."},
                 {"role": "user", "content": prompt}
             ]
         )
-        return response.choices[0].message["content"].strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"❌ GPT error: {e}")
-        return "I’m sorry, I didn’t understand that. Could you please repeat it?"
+        return "I'm sorry, I couldn't answer that at the moment. Please try again later."
 
+# Optional caching logic for faster responses
+AUDIO_CACHE = {}
 def synthesize_speech(text):
-    text_hash = hashlib.md5(text.encode()).hexdigest()
-    cached_file = f"{text_hash}.mp3"
-    cached_path = os.path.join(AUDIO_DIR, cached_file)
-
-    if os.path.exists(cached_path):
-        return cached_file
+    if text in AUDIO_CACHE:
+        return AUDIO_CACHE[text]
 
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
     headers = {
@@ -141,10 +141,13 @@ def synthesize_speech(text):
         print("❌ ElevenLabs API error:", response.text)
         raise Exception("ElevenLabs failed")
 
-    with open(cached_path, "wb") as f:
+    filename = f"{uuid.uuid4().hex}.mp3"
+    path = os.path.join(AUDIO_DIR, filename)
+    with open(path, "wb") as f:
         f.write(response.content)
 
-    return cached_file
+    AUDIO_CACHE[text] = filename
+    return filename
 
 def twiml_response(filename):
     url = f"{request.url_root}static/audio/{filename}"
