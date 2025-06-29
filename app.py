@@ -99,7 +99,9 @@ def ask_gpt(prompt):
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"❌ GPT error: {e}")
+        import traceback
+        print("❌ GPT error:", e)
+        traceback.print_exc()
         return "I'm sorry, I couldn't answer that at the moment. Please try again later."
 
 
@@ -153,10 +155,11 @@ def debug_version():
     import openai
     return f"✅ OpenAI version: {openai.__version__}"
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
-
+@app.route("/pip-freeze")
+def pip_freeze():
+    import subprocess
+    output = subprocess.check_output(['pip', 'freeze']).decode()
+    return f"<pre>{output}</pre>"
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
