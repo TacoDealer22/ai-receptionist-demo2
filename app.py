@@ -1,5 +1,6 @@
 import os
 import uuid
+import hashlib
 from flask import Flask, request, Response, jsonify
 import openai
 import requests
@@ -7,7 +8,6 @@ from dotenv import load_dotenv
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 from flask_cors import CORS
-import hashlib
 
 load_dotenv()
 app = Flask(__name__)
@@ -25,8 +25,8 @@ TWILIO_API_KEY = os.getenv("TWILIO_API_KEY")
 TWILIO_API_SECRET = os.getenv("TWILIO_API_SECRET")
 TWILIO_TWIML_APP_SID = os.getenv("TWILIO_TWIML_APP_SID")
 
-# Updated OpenAI client
-openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
+# ✅ Set OpenAI key the old safe way
+openai.api_key = OPENAI_API_KEY
 
 # Static Q&A
 STATIC_RESPONSES = {
@@ -103,20 +103,19 @@ def generate_token():
 
 def ask_gpt(prompt):
     try:
-        response = openai_client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are Luna, a helpful, natural, friendly AI receptionist. Answer questions clearly."},
                 {"role": "user", "content": prompt}
             ]
         )
-        return response.choices[0].message.content.strip()
+        return response.choices[0].message["content"].strip()
     except Exception as e:
         print(f"❌ GPT error: {e}")
         return "I’m sorry, I didn’t understand that. Could you please repeat it?"
 
 def synthesize_speech(text):
-    # Create a hash of the text to use as filename (for caching)
     text_hash = hashlib.md5(text.encode()).hexdigest()
     cached_file = f"{text_hash}.mp3"
     cached_path = os.path.join(AUDIO_DIR, cached_file)
