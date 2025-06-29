@@ -6,9 +6,11 @@ import requests
 from dotenv import load_dotenv
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
+from flask_cors import CORS  # ✅ added this
 
 load_dotenv()
 app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": "*"}})  # ✅ added this
 
 # Create audio folder
 AUDIO_DIR = "static/audio"
@@ -99,6 +101,7 @@ def generate_token():
     )
     token.add_grant(voice_grant)
     return jsonify({"token": token.to_jwt()})
+
 def ask_gpt(prompt):
     try:
         response = openai.ChatCompletion.create(
