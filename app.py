@@ -6,11 +6,11 @@ import requests
 from dotenv import load_dotenv
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
-from flask_cors import CORS  # ✅ added this
+from flask_cors import CORS
 
 load_dotenv()
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})  # ✅ added this
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Create audio folder
 AUDIO_DIR = "static/audio"
@@ -46,15 +46,15 @@ STATIC_RESPONSES = {
 def handle_voice():
     greeting = "Hi, this is Luna, your AI receptionist. How can I help you today?"
     audio_file = synthesize_speech(greeting)
-    audio_url = f"{request.url_root}static/audio/{audio_file}"
+    listening_file = synthesize_speech("I'm listening...")
 
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Play>{audio_url}</Play>
-    <Gather input="speech" action="/twiml" method="POST" timeout="6" speechTimeout="auto">
-        <Say>I’m listening...</Say>
+    <Play>{request.url_root}static/audio/{audio_file}</Play>
+    <Gather input="speech" action="/twiml" method="POST" timeout="8" speechTimeout="auto">
+        <Play>{request.url_root}static/audio/{listening_file}</Play>
     </Gather>
-    <Redirect method="POST">/hangup</Redirect>
+    <Redirect method="POST">/twiml</Redirect>
 </Response>"""
 
 @app.route("/twiml", methods=["POST"])
@@ -69,6 +69,16 @@ def generate_twiml():
         return twiml_response(audio_file, redirect="/hangup")
 
     user_question = user_input.lower()
+
+    if any(bye in user_question for bye in ["bye", "goodbye", "see you", "ma3 alsalama"]):
+        goodbye = "Thank you for calling. Goodbye!"
+        audio_file = synthesize_speech(goodbye)
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Play>{request.url_root}static/audio/{audio_file}</Play>
+    <Hangup/>
+</Response>"""
+
     if user_question in STATIC_RESPONSES:
         answer = STATIC_RESPONSES[user_question]
         print(f"✅ Matched static question. Answer: {answer}")
@@ -136,7 +146,9 @@ def synthesize_speech(text):
         "model_id": "eleven_monolingual_v1",
         "voice_settings": {
             "stability": 0.5,
-            "similarity_boost": 0.8
+            "similarity_boost": 0.8,
+            "style": "narration",
+            "use_speaker_boost": True
         }
     }
     response = requests.post(url, headers=headers, json=payload)
