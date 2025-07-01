@@ -44,8 +44,8 @@ STATIC_RESPONSES = {
     "what are your business hours?": "We operate Sunday through Thursday, from 9 in the morning to 6 in the evening.",
     "where are you located?": "Our main office is located in Amman, Jordan.",
     "who created you?": "I was created by OMAR MAJDI MOHAMMAD ALJALLAD.",
-    "who made Kadii?": "Kadii was created by OMAR MAJDI MOHAMMAD ALJALLAD.",
-    "what is your name?": "My name is Kadii. I’m your AI receptionist.",
+    "who made kady?": "kady was created by OMAR MAJDI MOHAMMAD ALJALLAD.",
+    "what is your name?": "My name is kady. I’m your AI receptionist.",
     "are you an ai?": "Yes, I’m an AI receptionist built to assist you quickly and clearly.",
     "what is the name of your company?": "Omar's demo.",
     "what does your company do?": "We provide AI Receptionist services through a subscription with our company.",
@@ -55,7 +55,7 @@ STATIC_RESPONSES = {
 
 @app.route("/voice", methods=["POST"])
 def voice():
-    greeting = "Hi, this is Kadii, your AI receptionist. How can I help you today?"
+    greeting = "Hi, this is kady, your AI receptionist. How can I help you today?"
     audio_file = synthesize_speech(greeting)
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -101,7 +101,7 @@ def ask_gpt(prompt):
         response = openai.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are Kadii, a helpful AI receptionist. Answer clearly and naturally."},
+                {"role": "system", "content": "You are kady, a helpful AI receptionist. Answer clearly and naturally."},
                 {"role": "user", "content": prompt}
             ]
         )
