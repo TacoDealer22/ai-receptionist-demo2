@@ -5,6 +5,7 @@ from utils import get_gpt_response, text_to_speech_elevenlabs, fallback_response
 from dotenv import load_dotenv
 from threading import Lock
 import uuid
+import pkg_resources
 
 load_dotenv()
 
@@ -18,7 +19,7 @@ conv_lock = Lock()
 KA_DYY_PROMPT = {
     "role": "system",
     "content": (
-        "You are Ka-dyy, an intelligent AI receptionist created by OMAR MAJDI MOHAMMAD ALJALLAD. "
+        "You are ka-dyy, an intelligent AI receptionist created by OMAR MAJDI MOHAMMAD ALJALLAD. "
         "You greet callers naturally, answer questions clearly, and sound warm, kind, and human. "
         "You can explain services, answer general knowledge questions, and always end calls politely."
     )
@@ -26,6 +27,8 @@ KA_DYY_PROMPT = {
 
 AUDIO_DIR = os.path.join("static", "audio")
 BASE_URL = os.getenv("BASE_URL", "http://localhost:5000")
+
+print("ELEVENLABS VERSION:", pkg_resources.get_distribution("elevenlabs").version)
 
 @app.route("/voice", methods=["POST"])
 def voice():
@@ -39,7 +42,7 @@ def voice():
         speechTimeout="auto",
         language="en-US"
     )
-    gather.say("Hello! This is Ka-dyy, Omar's AI receptionist. How can I help you today?", voice="Polly.Joanna")
+    gather.say("Hello! This is ka-dyy, Omar's AI receptionist. How can I help you today?", voice="Polly.Joanna")
     resp.append(gather)
     resp.redirect(url_for("voice", _external=True))
     return str(resp)
