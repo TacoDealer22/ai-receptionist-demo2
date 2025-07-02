@@ -1,4 +1,8 @@
 import os
+for var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
+    if var in os.environ:
+        print(f"[DEBUG] Removing proxy env var: {var}")
+        del os.environ[var]
 import uuid
 from flask import Flask, request, Response
 import requests
