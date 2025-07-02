@@ -1,8 +1,6 @@
 import os
 for var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
-    if var in os.environ:
-        print(f"[DEBUG] Removing proxy env var: {var}")
-        del os.environ[var]
+    os.environ[var] = ""
 import uuid
 from flask import Flask, request, Response
 import requests
@@ -33,6 +31,9 @@ required_vars = [
 for var in required_vars:
     if not os.getenv(var):
         raise RuntimeError(f"Missing required environment variable: {var}")
+
+print("[DEBUG] OpenAI loaded from:", openai.__file__)
+print("[DEBUG] OpenAI version:", openai.__version__)
 
 @app.route("/voice", methods=["POST"])
 def voice():
