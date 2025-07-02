@@ -1,6 +1,12 @@
 import os
+os.environ["OPENAI_PYTHON_HTTP_CLIENT"] = "requests"
 for var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
     os.environ[var] = ""
+print("==== ENVIRONMENT VARIABLES ====")
+for k, v in os.environ.items():
+    if "proxy" in k.lower() or "openai" in k.lower():
+        print(f"{k}={v}")
+print("===============================" )
 import uuid
 from flask import Flask, request, Response
 import requests
