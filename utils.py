@@ -1,8 +1,11 @@
 import os
 import openai
 from elevenlabs import generate, save, set_api_key
+import pkg_resources
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
+
+print("ELEVENLABS VERSION:", pkg_resources.get_distribution("elevenlabs").version)
 
 def get_gpt_response(messages, timeout=10):
     try:
