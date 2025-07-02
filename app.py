@@ -16,7 +16,7 @@ AUDIO_DIR = os.path.join("static", "audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
 # Greeting
-GREETING = "Hello! This is kadyy, Omar's AI receptionist. How can I help you today?"
+GREETING = "Hello! This is caddy, Omar's AI receptionist. How can I help you today?"
 
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 
@@ -55,7 +55,7 @@ def twiml():
     if not answer:
         # AI response
         answer = get_gpt_response([
-            {"role": "system", "content": "You are kadyy, an intelligent AI receptionist created by OMAR MAJDI MOHAMMAD ALJALLAD. You greet callers naturally, answer questions clearly, and sound warm, kind, and human. You can explain services, answer general knowledge questions, and always end calls politely."},
+            {"role": "system", "content": "You are caddy, an intelligent AI receptionist created by OMAR MAJDI MOHAMMAD ALJALLAD. You greet callers naturally, answer questions clearly, and sound warm, kind, and human. You can explain services, answer general knowledge questions, and always end calls politely."},
             {"role": "user", "content": user_input}
         ])
     if not answer:
