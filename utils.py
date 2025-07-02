@@ -2,10 +2,16 @@ import os
 import requests
 import openai
 
+# Debug: Print proxy-related environment variables
+for var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
+    if os.getenv(var):
+        print(f"[DEBUG] Proxy env var set: {var}={os.getenv(var)}")
+
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def get_gpt_response(messages, timeout=10):
     try:
+        # Ensure no proxies argument is ever passed
         response = openai.chat.completions.create(
             model="gpt-4o",
             messages=messages,
@@ -54,8 +60,8 @@ def static_qa_answer(user_text):
         "what are your business hours?": "We operate Sunday through Thursday, from 9 in the morning to 6 in the evening.",
         "where are you located?": "Our main office is located in Amman, Jordan.",
         "who created you?": "I was created by OMAR MAJDI MOHAMMAD ALJALLAD.",
-        "who made kadyy?": "kadyy was created by OMAR MAJDI MOHAMMAD ALJALLAD.",
-        "what is your name?": "My name is kadyy. I'm your AI receptionist.",
+        "who made caddy?": "caddy was created by OMAR MAJDI MOHAMMAD ALJALLAD.",
+        "what is your name?": "My name is caddy. I'm your AI receptionist.",
         "are you an ai?": "Yes, I'm an AI receptionist built to assist you quickly and clearly.",
         "what is the name of your company?": "Omar's demo.",
         "what does your company do?": "We provide AI Receptionist services through a subscription with our company.",
