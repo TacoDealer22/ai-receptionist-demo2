@@ -19,7 +19,7 @@ def get_gpt_response(messages, timeout=10):
 
 def text_to_speech_elevenlabs(text, filename):
     api_key = os.getenv("ELEVENLABS_API_KEY")
-    voice_id = os.getenv("VOICE_ID")
+    voice_id = os.getenv("ELEVENLABS_VOICE_ID")
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {
         "xi-api-key": api_key,
