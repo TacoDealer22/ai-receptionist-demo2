@@ -1,0 +1,65 @@
+import os
+import openai
+from elevenlabs import generate, save, set_api_key
+
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+def get_gpt_response(messages, timeout=10):
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            temperature=0.6,
+            timeout=timeout
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"OpenAI error: {e}")
+        return None
+
+def text_to_speech_elevenlabs(text, filename):
+    api_key = os.getenv("ELEVENLABS_API_KEY")
+    voice_id = os.getenv("VOICE_ID")
+    set_api_key(api_key)
+    try:
+        audio = generate(
+            text=text,
+            voice=voice_id,
+            model="eleven_multilingual_v2",
+            stream=False,
+            latency=None,
+            voice_settings={"stability": 0.5, "similarity_boost": 0.7}
+        )
+        save(audio, filename)
+        return True
+    except Exception as e:
+        print(f"ElevenLabs TTS error: {e}")
+        return False
+
+def fallback_response():
+    return "I'm sorry, I'm having trouble answering right now. Please try again later or call back soon!"
+
+def static_qa_answer(user_text):
+    # Lowercase for case-insensitive matching
+    q = user_text.strip().lower()
+    static_answers = {
+        "what are your working hours?": "We're open from 9 AM to 6 PM, Sunday to Thursday.",
+        "what are your business hours?": "We operate Sunday through Thursday, from 9 in the morning to 6 in the evening.",
+        "where are you located?": "Our main office is located in Amman, Jordan.",
+        "who created you?": "I was created by OMAR MAJDI MOHAMMAD ALJALLAD.",
+        "who made kade?": "kade was created by OMAR MAJDI MOHAMMAD ALJALLAD.",
+        "what is your name?": "My name is kade. I'm your AI receptionist.",
+        "are you an ai?": "Yes, I'm an AI receptionist built to assist you quickly and clearly.",
+        "what is the name of your company?": "Omar's demo.",
+        "what does your company do?": "We provide AI Receptionist services through a subscription with our company.",
+        "can i speak to someone?": "I'll forward your request. Please leave your name and message after the tone.",
+        "can you call me back?": "I'll forward your request. Please leave your name and number after the tone."
+    }
+    # Try exact match
+    if q in static_answers:
+        return static_answers[q]
+    # Try partial match (for more natural questions)
+    for k, v in static_answers.items():
+        if k.replace('?', '') in q:
+            return v
+    return None 
