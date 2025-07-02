@@ -1,10 +1,10 @@
 import os
 for var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
-    if var in os.environ:
-        print(f"[DEBUG] Removing proxy env var: {var}")
-        del os.environ[var]
+    os.environ[var] = ""
 import requests
 import openai
+print("[DEBUG] OpenAI loaded from:", openai.__file__)
+print("[DEBUG] OpenAI version:", openai.__version__)
 
 # Debug: Print proxy-related environment variables
 for var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
