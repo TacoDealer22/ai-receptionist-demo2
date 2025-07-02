@@ -17,6 +17,8 @@ from utils import get_gpt_response, text_to_speech_elevenlabs, fallback_response
 from twilio.rest import Client
 import io
 import tempfile
+from twilio.jwt.access_token import AccessToken
+from twilio.jwt.access_token.grants import VoiceGrant
 
 load_dotenv()
 
@@ -139,6 +141,30 @@ def web_voice():
         audio_bytes = temp_out.read()
     # Return audio as response
     return Response(audio_bytes, mimetype="audio/mpeg")
+
+@app.route("/token", methods=["GET"])
+def token():
+    twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    twilio_api_key = os.getenv("TWILIO_API_KEY_SID")
+    twilio_api_secret = os.getenv("TWILIO_API_KEY_SECRET")
+    twilio_app_sid = os.getenv("TWILIO_TWIML_APP_SID")
+    identity = "user"
+
+    if not all([twilio_account_sid, twilio_api_key, twilio_api_secret, twilio_app_sid]):
+        return jsonify({"error": "Missing Twilio environment variables"}), 500
+
+    token = AccessToken(
+        twilio_account_sid,
+        twilio_api_key,
+        twilio_api_secret,
+        identity=identity
+    )
+    voice_grant = VoiceGrant(
+        outgoing_application_sid=twilio_app_sid,
+        incoming_allow=True
+    )
+    token.add_grant(voice_grant)
+    return jsonify(token=token.to_jwt().decode())
 
 def synthesize_and_cache(text):
     # Use a simple cache to avoid regenerating the same audio
