@@ -1,11 +1,8 @@
 import os
+import requests
 import openai
-from elevenlabs import generate, save, set_api_key
-import pkg_resources
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
-
-print("ELEVENLABS VERSION:", pkg_resources.get_distribution("elevenlabs").version)
 
 def get_gpt_response(messages, timeout=10):
     try:
@@ -23,18 +20,25 @@ def get_gpt_response(messages, timeout=10):
 def text_to_speech_elevenlabs(text, filename):
     api_key = os.getenv("ELEVENLABS_API_KEY")
     voice_id = os.getenv("VOICE_ID")
-    set_api_key(api_key)
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    headers = {
+        "xi-api-key": api_key,
+        "Content-Type": "application/json"
+    }
+    data = {
+        "text": text,
+        "voice_settings": {"stability": 0.5, "similarity_boost": 0.7}
+    }
     try:
-        audio = generate(
-            text=text,
-            voice=voice_id,
-            model="eleven_multilingual_v2",
-            stream=False,
-            latency=None,
-            voice_settings={"stability": 0.5, "similarity_boost": 0.7}
-        )
-        save(audio, filename)
-        return True
+        r = requests.post(url, headers=headers, json=data, stream=True, timeout=15)
+        if r.status_code == 200:
+            with open(filename, "wb") as f:
+                for chunk in r.iter_content(chunk_size=4096):
+                    f.write(chunk)
+            return True
+        else:
+            print(f"ElevenLabs error: {r.status_code} {r.text}")
+            return False
     except Exception as e:
         print(f"ElevenLabs TTS error: {e}")
         return False
@@ -50,8 +54,8 @@ def static_qa_answer(user_text):
         "what are your business hours?": "We operate Sunday through Thursday, from 9 in the morning to 6 in the evening.",
         "where are you located?": "Our main office is located in Amman, Jordan.",
         "who created you?": "I was created by OMAR MAJDI MOHAMMAD ALJALLAD.",
-        "who made kade?": "kade was created by OMAR MAJDI MOHAMMAD ALJALLAD.",
-        "what is your name?": "My name is kade. I'm your AI receptionist.",
+        "who made ka-dyy?": "ka-dyy was created by OMAR MAJDI MOHAMMAD ALJALLAD.",
+        "what is your name?": "My name is ka-dyy. I'm your AI receptionist.",
         "are you an ai?": "Yes, I'm an AI receptionist built to assist you quickly and clearly.",
         "what is the name of your company?": "Omar's demo.",
         "what does your company do?": "We provide AI Receptionist services through a subscription with our company.",
