@@ -48,6 +48,8 @@ for var in required_vars:
 print("[DEBUG] OpenAI loaded from:", openai.__file__)
 print("[DEBUG] OpenAI version:", openai.__version__)
 
+print("TwiML App SID:", os.getenv("TWILIO_TWIML_APP_SID"))
+
 @app.route("/voice", methods=["POST"])
 def voice():
     greeting_audio = synthesize_and_cache(GREETING)
