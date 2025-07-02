@@ -8,18 +8,20 @@ for k, v in os.environ.items():
         print(f"{k}={v}")
 print("===============================" )
 import uuid
-from flask import Flask, request, Response, jsonify
+from flask import Flask, request, Response, jsonify, send_file
 import requests
 from dotenv import load_dotenv
 from flask_cors import CORS
 import openai
 from utils import get_gpt_response, text_to_speech_elevenlabs, fallback_response, static_qa_answer
 from twilio.rest import Client
+import io
+import tempfile
 
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 AUDIO_DIR = os.path.join("static", "audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
@@ -95,6 +97,48 @@ def call():
         return jsonify({"status": "initiated", "call_sid": call.sid}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/web-greet", methods=["GET"])
+def web_greet():
+    """Returns a greeting audio file for the web widget."""
+    greeting_audio = synthesize_and_cache(GREETING)
+    audio_path = os.path.join(AUDIO_DIR, greeting_audio)
+    return send_file(audio_path, mimetype="audio/mpeg")
+
+@app.route("/web-voice", methods=["POST"])
+def web_voice():
+    """Receives user audio (webm or wav), transcribes, gets GPT response, TTS, returns audio."""
+    if "audio" not in request.files:
+        return jsonify({"error": "No audio file uploaded."}), 400
+    audio_file = request.files["audio"]
+    # Save to temp file
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as temp_audio:
+        audio_file.save(temp_audio)
+        temp_audio_path = temp_audio.name
+    # Transcribe with OpenAI Whisper
+    with open(temp_audio_path, "rb") as af:
+        transcript = openai.audio.transcriptions.create(
+            model="whisper-1",
+            file=af
+        )
+    user_text = transcript.text.strip()
+    print(f"[WEB] User said: {user_text}")
+    # Get AI response
+    answer = static_qa_answer(user_text)
+    if not answer:
+        answer = get_gpt_response([
+            {"role": "system", "content": "You are caddy, an intelligent AI receptionist created by OMAR MAJDI MOHAMMAD ALJALLAD. You greet callers naturally, answer questions clearly, and sound warm, kind, and human. You can explain services, answer general knowledge questions, and always end calls politely."},
+            {"role": "user", "content": user_text}
+        ])
+    if not answer:
+        answer = fallback_response()
+    # Synthesize with ElevenLabs
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_out:
+        text_to_speech_elevenlabs(answer, temp_out.name)
+        temp_out.seek(0)
+        audio_bytes = temp_out.read()
+    # Return audio as response
+    return Response(audio_bytes, mimetype="audio/mpeg")
 
 def synthesize_and_cache(text):
     # Use a simple cache to avoid regenerating the same audio
