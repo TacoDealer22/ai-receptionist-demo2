@@ -18,6 +18,18 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 # Greeting
 GREETING = "Hello! This is ka-dyy, Omar's AI receptionist. How can I help you today?"
 
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+
+required_vars = [
+    "OPENAI_API_KEY",
+    "ELEVENLABS_API_KEY",
+    "ELEVENLABS_VOICE_ID",
+    # Add Twilio vars if you use them
+]
+for var in required_vars:
+    if not os.getenv(var):
+        raise RuntimeError(f"Missing required environment variable: {var}")
+
 @app.route("/voice", methods=["POST"])
 def voice():
     greeting_audio = synthesize_and_cache(GREETING)
