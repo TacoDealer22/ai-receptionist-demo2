@@ -8,12 +8,13 @@ for k, v in os.environ.items():
         print(f"{k}={v}")
 print("===============================" )
 import uuid
-from flask import Flask, request, Response
+from flask import Flask, request, Response, jsonify
 import requests
 from dotenv import load_dotenv
 from flask_cors import CORS
 import openai
 from utils import get_gpt_response, text_to_speech_elevenlabs, fallback_response, static_qa_answer
+from twilio.rest import Client
 
 load_dotenv()
 
@@ -27,6 +28,8 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 GREETING = "Hello! This is caddy, Omar's AI receptionist. How can I help you today?"
 
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
 
 required_vars = [
     "OPENAI_API_KEY",
@@ -72,6 +75,26 @@ def twiml():
     if not answer:
         answer = fallback_response()
     return twiml_response(synthesize_and_cache(answer))
+
+@app.route("/call", methods=["POST"])
+def call():
+    data = request.get_json()
+    to_number = data.get("to")
+    message = data.get("message", GREETING)
+    if not to_number:
+        return jsonify({"error": "Missing 'to' phone number."}), 400
+    if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_PHONE_NUMBER):
+        return jsonify({"error": "Twilio environment variables not set."}), 500
+    try:
+        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        call = client.calls.create(
+            to=to_number,
+            from_=TWILIO_PHONE_NUMBER,
+            url=f"{request.url_root}voice"  # This should point to your /voice endpoint
+        )
+        return jsonify({"status": "initiated", "call_sid": call.sid}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 def synthesize_and_cache(text):
     # Use a simple cache to avoid regenerating the same audio
