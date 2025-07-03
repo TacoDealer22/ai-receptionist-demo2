@@ -147,8 +147,8 @@ def web_voice():
 @app.route("/token", methods=["GET"])
 def token():
     twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    twilio_api_key = os.getenv("TWILIO_API_KEY_SID")
-    twilio_api_secret = os.getenv("TWILIO_API_KEY_SECRET")
+    twilio_api_key = os.getenv("TWILIO_API_KEY")
+    twilio_api_secret = os.getenv("TWILIO_API_SECRET")
     twilio_app_sid = os.getenv("TWILIO_TWIML_APP_SID")
     identity = "user"
 
