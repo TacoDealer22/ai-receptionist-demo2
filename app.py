@@ -172,7 +172,7 @@ def token():
             incoming_allow=True
         )
         token.add_grant(voice_grant)
-        return jsonify(token=token.to_jwt().decode())
+        return jsonify(token=token.to_jwt())
     except Exception as e:
         print("Error in /token:", str(e))
         return jsonify({"error": str(e)}), 500
