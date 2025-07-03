@@ -146,27 +146,36 @@ def web_voice():
 
 @app.route("/token", methods=["GET"])
 def token():
-    twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    twilio_api_key = os.getenv("TWILIO_API_KEY")
-    twilio_api_secret = os.getenv("TWILIO_API_SECRET")
-    twilio_app_sid = os.getenv("TWILIO_TWIML_APP_SID")
-    identity = "user"
+    try:
+        twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_api_key = os.getenv("TWILIO_API_KEY")
+        twilio_api_secret = os.getenv("TWILIO_API_SECRET")
+        twilio_app_sid = os.getenv("TWILIO_TWIML_APP_SID")
+        identity = "user"
 
-    if not all([twilio_account_sid, twilio_api_key, twilio_api_secret, twilio_app_sid]):
-        return jsonify({"error": "Missing Twilio environment variables"}), 500
+        print("TWILIO_ACCOUNT_SID:", twilio_account_sid)
+        print("TWILIO_API_KEY:", twilio_api_key)
+        print("TWILIO_API_SECRET:", twilio_api_secret)
+        print("TWILIO_TWIML_APP_SID:", twilio_app_sid)
 
-    token = AccessToken(
-        twilio_account_sid,
-        twilio_api_key,
-        twilio_api_secret,
-        identity=identity
-    )
-    voice_grant = VoiceGrant(
-        outgoing_application_sid=twilio_app_sid,
-        incoming_allow=True
-    )
-    token.add_grant(voice_grant)
-    return jsonify(token=token.to_jwt().decode())
+        if not all([twilio_account_sid, twilio_api_key, twilio_api_secret, twilio_app_sid]):
+            return jsonify({"error": "Missing Twilio environment variables"}), 500
+
+        token = AccessToken(
+            twilio_account_sid,
+            twilio_api_key,
+            twilio_api_secret,
+            identity=identity
+        )
+        voice_grant = VoiceGrant(
+            outgoing_application_sid=twilio_app_sid,
+            incoming_allow=True
+        )
+        token.add_grant(voice_grant)
+        return jsonify(token=token.to_jwt().decode())
+    except Exception as e:
+        print("Error in /token:", str(e))
+        return jsonify({"error": str(e)}), 500
 
 def synthesize_and_cache(text):
     # Use a simple cache to avoid regenerating the same audio
